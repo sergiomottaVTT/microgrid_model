@@ -46,6 +46,8 @@ def BESS_behaviour (difference, BESS_parameters, BESS_SoC, BESS_io, price_data, 
 
     """
 
+    # Do we want the BESS to be charged by the grid, or only by the excess generation?
+    
     # If we have excess generation, the BESS will always try to charge    
     if difference > 0:
         BESS_discharge = 0
@@ -57,34 +59,71 @@ def BESS_behaviour (difference, BESS_parameters, BESS_SoC, BESS_io, price_data, 
         difference = difference - BESS_charge
 
     # If we don't have excess generation, the BESS will discharge if it's control parameter is set for it
-    else:   
-        BESS_charge = 0
-        
-        if BESS_parameters['Control'] == 'load_threshold':
-            # the BESS discharges only if the load is high enough
-            if abs(difference) >= BESS_parameters['Control setpoint']:
-                BESS_discharge = min(BESS_parameters['cRate'], abs(difference), BESS_parameters['SoC'])
-                BESS_parameters['SoC'] = max(BESS_parameters['SoC'] - BESS_discharge, 0)
-            else:
-                BESS_discharge = 0
-                BESS_parameters['SoC'] = max(BESS_parameters['SoC'] - BESS_discharge, 0)
-        
-        elif BESS_parameters['Control'] == 'price_threshold':
-            # The BESS discharges only if the price is high enough
-            if price_data[timestamp] > BESS_parameters['Control setpoint']:
-                BESS_discharge = min(BESS_parameters['cRate'], abs(difference), BESS_parameters['SoC'])
-                BESS_parameters['SoC'] = max(BESS_parameters['SoC'] - BESS_discharge, 0)
-            else:
-                BESS_discharge = 0
-                BESS_parameters['SoC'] = max(BESS_parameters['SoC'] - BESS_discharge, 0)
-        
-        else: # no control defined
-            print('Warning: no BESS control defined!')
+    else:
+        # define if the BESS will charge or discharge
+        # DISCHARGE
+        if (BESS_parameters['Control'] == 'load_threshold') and (abs(difference) >= BESS_parameters['Control setpoint']):
+            BESS_discharge = min(BESS_parameters['cRate'], abs(difference), BESS_parameters['SoC'])
+            BESS_parameters['SoC'] = max(BESS_parameters['SoC'] - BESS_discharge, 0)
+            BESS_charge = 0
+        elif (BESS_parameters['Control'] == 'price_threshold') and (price_data[timestamp] >= BESS_parameters['Control setpoint']):
+            BESS_discharge = min(BESS_parameters['cRate'], abs(difference), BESS_parameters['SoC'])
+            BESS_parameters['SoC'] = max(BESS_parameters['SoC'] - BESS_discharge, 0)
+            BESS_charge = 0
+        # CHARGE
+        elif (BESS_parameters['Grid enabled'] == True) and (BESS_parameters['SoC'] < BESS_parameters['SoC threshold']*BESS_parameters['capacity']):
+            BESS_charge = min(BESS_parameters['cRate'], BESS_parameters['capacity'] - BESS_parameters['SoC'])
+            BESS_parameters['SoC'] = min(BESS_parameters['SoC'] + BESS_charge, BESS_parameters['capacity'])
+            BESS_discharge = 0
+        # NOTHING HAPPENS - BESS idle
+        else:
+            BESS_charge = 0
             BESS_discharge = 0
             BESS_parameters['SoC'] = max(BESS_parameters['SoC'] - BESS_discharge, 0)
+            
+            
+        # if (BESS_parameters['Grid enabled'] == True) and (BESS_parameters['SoC'] < BESS_parameters['SoC threshold']*BESS_parameters['capacity']):
+        #     if (BESS_parameters['Control'] == 'load_threshold') and (abs(difference) < BESS_parameters['Control setpoint']):
+        #     # We charge the BESS instead of discharging it
+        #         BESS_charge = min(BESS_parameters['cRate'], BESS_parameters['capacity'] - BESS_parameters['SoC'])
+        #         BESS_parameters['SoC'] = min(BESS_parameters['SoC'] + BESS_charge, BESS_parameters['capacity'])
+        #         BESS_discharge = 0
+        #     elif (BESS_parameters['Control'] == 'price_threshold') and (price_data[timestamp] < BESS_parameters['Control setpoint']):
+        #         BESS_charge = min(BESS_parameters['cRate'], BESS_parameters['capacity'] - BESS_parameters['SoC'])
+        #         BESS_parameters['SoC'] = min(BESS_parameters['SoC'] + BESS_charge, BESS_parameters['capacity'])
+        #         BESS_discharge = 0
+        #     else:
+        #         BESS_charge = 0
+        #         BESS_discharge = 0
+        #         BESS_parameters['SoC'] = BESS_parameters['SoC']
+            
+        # else:
+        #     BESS_charge = 0
+        #     if BESS_parameters['Control'] == 'load_threshold':
+        #         # the BESS discharges only if the load is high enough
+        #         if abs(difference) >= BESS_parameters['Control setpoint']:
+        #             BESS_discharge = min(BESS_parameters['cRate'], abs(difference), BESS_parameters['SoC'])
+        #             BESS_parameters['SoC'] = max(BESS_parameters['SoC'] - BESS_discharge, 0)
+        #         else:
+        #             BESS_discharge = 0
+        #             BESS_parameters['SoC'] = max(BESS_parameters['SoC'] - BESS_discharge, 0)
+            
+        #     elif BESS_parameters['Control'] == 'price_threshold':
+        #         # The BESS discharges only if the price is high enough
+        #         if price_data[timestamp] > BESS_parameters['Control setpoint']:
+        #             BESS_discharge = min(BESS_parameters['cRate'], abs(difference), BESS_parameters['SoC'])
+        #             BESS_parameters['SoC'] = max(BESS_parameters['SoC'] - BESS_discharge, 0)
+        #         else:
+        #             BESS_discharge = 0
+        #             BESS_parameters['SoC'] = max(BESS_parameters['SoC'] - BESS_discharge, 0)
+            
+        #     else: # no control defined
+        #         print('Warning: no BESS control defined!')
+        #         BESS_discharge = 0
+        #         BESS_parameters['SoC'] = max(BESS_parameters['SoC'] - BESS_discharge, 0)
         
-        # removing the BESS discharge from the difference
-        difference = difference + BESS_discharge
+        # removing the BESS charge/discharge from the difference
+        difference = difference - BESS_charge + BESS_discharge
 
     # storing the values to be used in the microgrid dataframe
     BESS_SoC.append(BESS_parameters['SoC'])
@@ -191,7 +230,7 @@ def  EV_behaviour(timestamp, difference, EV_plugged, EV_parameters, price_data, 
 # %% lOAD-SHIFTING FUNCTIONS:
 
 
-def load_shift_behaviour (difference, newload, timestamp, pairs, load_shift, flexibility_curve, price_data):
+def load_shift_behaviour (difference, newload, load_data, timestamp, pairs, load_shift, flexibility_curve, price_data):
     """
     Function to perform the load shifting operations. When there is excess generation, we want to shift load towards the current time step, so we maximise
     self-consumption and reduce the amount of load imported from the grid. When there is no excess generation, we want to verify if we are consuming at
@@ -237,8 +276,9 @@ def load_shift_behaviour (difference, newload, timestamp, pairs, load_shift, fle
         
         # Performing the shifts from upcoming timestamps
         for i in range(len(idx_shiftable_loads)):
-            
-            if (difference > 0) and (newload[timestamp] < np.max(newload)):
+    
+            if (difference > 0) and (newload[timestamp] < np.max(newload)) and \
+                (load_shift[idx_shiftable_loads[i]] >= 0):
                 # How much load can be shifted from this first timestamp [i]
                 load_shifted = newload[idx_shiftable_loads[i]]*flexibility_curve[idx_shiftable_loads[i]]
                 
@@ -250,7 +290,8 @@ def load_shift_behaviour (difference, newload, timestamp, pairs, load_shift, fle
                 newload[timestamp] = newload[timestamp] + load_shifted
                 newload[idx_shiftable_loads[i]] = newload[idx_shiftable_loads[i]] - load_shifted
                 # marking that there was a load shift executed here and timestamp has extra load
-                load_shift[timestamp] = 1
+                load_shift[timestamp] = load_shift[timestamp] + 1 # shift TO here
+                load_shift[idx_shiftable_loads[i]] = load_shift[idx_shiftable_loads[i]] - 1 # shift FROM here
                 # removing this extra load shifted from the difference (positive)
                 difference = difference - load_shifted
         
@@ -261,7 +302,7 @@ def load_shift_behaviour (difference, newload, timestamp, pairs, load_shift, fle
         # How much load can we shift? We can't shift more than the flexibility limit of the load
         load_shifted = min(flexibility_curve[timestamp]*newload[timestamp], abs(difference))
         # we check if this load can and should be shifted somehow to another time
-        if (load_shift[timestamp] == 0) and (spot_price_following == True):   # we can only shift it if it wasn't shifted before
+        if (load_shift[timestamp] >= 0) and (spot_price_following == True):   # we can only shift load AWAY it if it wasn't shifted AWAY before
             # We get which are the timestamps to where the load can be shifted
             # However, we can't change the past loads, so we can only shift the current load to a future timestamp
             times_to_shift = [item for item in pairs[timestamp][1] if item > timestamp]
@@ -289,9 +330,12 @@ def load_shift_behaviour (difference, newload, timestamp, pairs, load_shift, fle
                 
                 # and let's mark that the load was shifted (can't be shifted again), and the remaining load at timestamp is smaller (difference is negative)
                 difference = difference + load_shifted 
-                load_shift[timestamp] = 1
+                load_shift[timestamp] = load_shift[timestamp] - 1 # shifted FROM here
+                load_shift[times_to_shift[index_of_min_price]] = load_shift[times_to_shift[index_of_min_price]] + 1 #shifted TO here
 
-    return difference, newload
+
+
+    return difference, newload, load_shift
 
 
 # %% GRID-RELATED FUNCTIONS:

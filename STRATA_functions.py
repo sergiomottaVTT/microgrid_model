@@ -46,7 +46,7 @@ def min_intervals(array, interval_mins):
 # %% Data modification
 
 
-def modify_data(load_data, gen_data, price_data, number_days, minute_intervals, plotting=True):
+def modify_data(load_data, gen_data, price_data, number_days, minute_intervals, plotting=False):
     """
     Function to make the data modifications: array length, interpolate for different time intervals.
 
@@ -133,7 +133,7 @@ def modify_data(load_data, gen_data, price_data, number_days, minute_intervals, 
 # %% Minimum and Maximum loads
 
 def min_max_loads(load_data, flexibility_curve, flexibility_window, **kwargs):
-    minload, maxload, addload = np.zeros_like(load_data), np.zeros_like(load_data), np.zeros_like(load_data)
+    minload, maxload, addload, addload_future = np.zeros_like(load_data), np.zeros_like(load_data), np.zeros_like(load_data), np.zeros_like(load_data)
     plot = kwargs.get('plot')
     
     # Calculating the minimum possible load
@@ -162,14 +162,25 @@ def min_max_loads(load_data, flexibility_curve, flexibility_window, **kwargs):
     
         symmetrical_indexes = previous + posterior
         
+        # if we consider only the future indices, because we can't change the past timestamps
+        future_indexes_only = posterior
+        
         # just to save the hours and the indexes
         pairs.append((timestamp, symmetrical_indexes))
         
         for indices in symmetrical_indexes:
             addload[indices] = addload[indices] + load_shift
     
+    
+        for indices in future_indexes_only:
+            addload_future[indices] = addload_future[indices] + load_shift
+    
     # the maximum load possible is the combination of the "normal" load and the potential for all load shifting from nearby hours
     maxload = load_data + addload
+    
+    # the maximum load possible when considering only future load shifts is
+    maxload_future = load_data + addload_future
+    
     
     if plot == True:
         plt.figure()
@@ -179,35 +190,49 @@ def min_max_loads(load_data, flexibility_curve, flexibility_window, **kwargs):
         plt.title('Min, Max and Avg load curves')
         plt.legend()
         
-    return pairs, minload, maxload
+    return pairs, minload, maxload, maxload_future
 
 # %% Defining flexibility interval and window
 
-def define_flexibility(number_days, minute_intervals, load_data):
+def define_flexibility(number_days, minute_intervals, load_data, plot=False):
     
     # Each timestamp has a different amount of flexibility, based on people's willingness to modify their consumption behaviour (% of the load)
-    flexibility_curve = [0.6, 0.6, 0.6, 0.6, 0.6, 0.6, # early morning, 00:00 to 05:00
-                         0.3, 0.3, 0.3, 0.3, 0.3, 0.3, # morning, 06:00 to 11:00
-                         0.4, 0.4, 0.4, 0.4, 0.1, 0.1, # afternoon, 12:00 to 17:00
-                         0.1, 0.1, 0.4, 0.6, 0.6, 0.6 # evening, 18:00 to 23:00
-                         ] * (number_days)
+    # flexibility_curve = [0.6, 0.6, 0.6, 0.6, 0.6, 0.6, # early morning, 00:00 to 05:00
+    #                      0.3, 0.3, 0.3, 0.3, 0.3, 0.3, # morning, 06:00 to 11:00
+    #                      0.4, 0.4, 0.4, 0.4, 0.1, 0.1, # afternoon, 12:00 to 17:00
+    #                      0.1, 0.1, 0.4, 0.6, 0.6, 0.6 # evening, 18:00 to 23:00
+    #                      ] * (number_days)
+    
+    # Keepign a constant flexibility of 15%
+    flexibility_curve = [0.15] * 24 * number_days
+    
     
     flexibility_curve = np.repeat(flexibility_curve, 60/minute_intervals)
     
     # Similarly, the willingness to shif the load is associated to WHEN the load will be shifted to. Thus, a symmetrical time window of X timestamps is defined
-    flexibility_window = [4, 4, 4, 4, 4, 4, # early morning, 00:00 to 05:00
-                         2, 2, 2, 2, 2, 2, # morning, 06:00 to 11:00
-                         2, 2, 2, 2, 2, 2, # afternoon, 12:00 to 17:00
-                         2, 2, 3, 4, 4, 4 # evening, 18:00 to 23:00
-                         ] * (number_days)
+    # flexibility_window = [4, 4, 4, 4, 4, 4, # early morning, 00:00 to 05:00
+    #                      2, 2, 2, 2, 2, 2, # morning, 06:00 to 11:00
+    #                      2, 2, 2, 2, 2, 2, # afternoon, 12:00 to 17:00
+    #                      2, 2, 3, 4, 4, 4 # evening, 18:00 to 23:00
+    #                      ] * (number_days)
+    
+    flexibility_window = [4] * 24 * number_days
     
     flexibility_window = np.repeat(flexibility_window, 60/minute_intervals)
 
     # How much the load can be at minimum and maximum value considering the flexibility parameters?
-    pairs, minload, maxload = min_max_loads(load_data, flexibility_curve, flexibility_window, plot=False)
+    pairs, minload, maxload, maxload_future = min_max_loads(load_data, flexibility_curve, flexibility_window, plot=plot)
 
+    if plot==True:
+        fig, ax = plt.subplots(2,1, sharex=True)
+        ax[0].plot(flexibility_curve)
+        ax[0].set_title('Flexibility curve')
+        ax[0].set_ylabel('% of load')
+        ax[1].plot(flexibility_window)
+        ax[1].set_ylabel('Timestamps of flexibility')
+        ax[1].set_xlabel('Timestamp')
 
-    return flexibility_curve, flexibility_window, pairs, minload, maxload
+    return flexibility_curve, flexibility_window, pairs, minload, maxload, maxload_future
 
 # %% Automatic and controlled load shifting
 
