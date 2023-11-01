@@ -130,45 +130,6 @@ def modify_data(load_data, gen_data, price_data, number_days, minute_intervals, 
 
 
 
-# %% Automatic and controlled load shifting
-
-def controlled_load_shift_sc(load_data, gen_data, pairs, flexibility_controlled, **kwargs):
-    
-    newload = load_data.copy()
-    plot = kwargs.get('plot')
-    minload = kwargs.get('minload')
-    maxload = kwargs.get('maxload')
-    
-    # We first perform the controlled load shift from the microgrid control
-    
-    # we have a generation and demand forecasts and we can identify when the generation will be in excess - which enables the load shift
-    idx_excess_gen = np.where(gen_data  > load_data)[0]
-    
-    # now we need to find which indexes have the indexes in idx_excess_gen as targets for load shifts. I.E. the timestamps in _pairs_ that contain the indexes
-    # in idx_excess_gen as a component of their tuples. We'll shift the largest load
-    for index in idx_excess_gen:
-        idx_shiftable_loads = [pair[0] for pair in pairs if index in pair[1]]
-        max_load_index = max(idx_shiftable_loads, key=lambda idex: newload[idex])
-        for j in idx_shiftable_loads:
-            if gen_data[index] > newload[index]:
-                newload[index] = newload[index] + newload[j]*flexibility_controlled
-                newload[j] = newload[j] - newload[j]*flexibility_controlled
-
-    if plot == True:
-        plt.figure()
-        plt.plot(gen_data, linestyle='--', label='Generation')
-        plt.plot(load_data, label='Original load')
-        plt.plot(newload, label='New load with flexibility')
-        plt.plot(minload, linestyle='--', linewidth=0.5, alpha=0.5, label='Minimum load')
-        plt.plot(maxload, linestyle='--', linewidth=0.5, alpha=0.5, label='Maximum load')
-        plt.legend()
-
-    return newload
-
-
-
-
-
 # %% Result evaluation
 
 def result_eval(microgrid_simulation, minute_intervals, show_costs=True, show_energy=True):

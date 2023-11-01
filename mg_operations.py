@@ -81,47 +81,7 @@ def BESS_behaviour (difference, BESS_parameters, BESS_SoC, BESS_io, price_data, 
             BESS_discharge = 0
             BESS_parameters['SoC'] = max(BESS_parameters['SoC'] - BESS_discharge, 0)
             
-            
-        # if (BESS_parameters['Grid enabled'] == True) and (BESS_parameters['SoC'] < BESS_parameters['SoC threshold']*BESS_parameters['capacity']):
-        #     if (BESS_parameters['Control'] == 'load_threshold') and (abs(difference) < BESS_parameters['Control setpoint']):
-        #     # We charge the BESS instead of discharging it
-        #         BESS_charge = min(BESS_parameters['cRate'], BESS_parameters['capacity'] - BESS_parameters['SoC'])
-        #         BESS_parameters['SoC'] = min(BESS_parameters['SoC'] + BESS_charge, BESS_parameters['capacity'])
-        #         BESS_discharge = 0
-        #     elif (BESS_parameters['Control'] == 'price_threshold') and (price_data[timestamp] < BESS_parameters['Control setpoint']):
-        #         BESS_charge = min(BESS_parameters['cRate'], BESS_parameters['capacity'] - BESS_parameters['SoC'])
-        #         BESS_parameters['SoC'] = min(BESS_parameters['SoC'] + BESS_charge, BESS_parameters['capacity'])
-        #         BESS_discharge = 0
-        #     else:
-        #         BESS_charge = 0
-        #         BESS_discharge = 0
-        #         BESS_parameters['SoC'] = BESS_parameters['SoC']
-            
-        # else:
-        #     BESS_charge = 0
-        #     if BESS_parameters['Control'] == 'load_threshold':
-        #         # the BESS discharges only if the load is high enough
-        #         if abs(difference) >= BESS_parameters['Control setpoint']:
-        #             BESS_discharge = min(BESS_parameters['cRate'], abs(difference), BESS_parameters['SoC'])
-        #             BESS_parameters['SoC'] = max(BESS_parameters['SoC'] - BESS_discharge, 0)
-        #         else:
-        #             BESS_discharge = 0
-        #             BESS_parameters['SoC'] = max(BESS_parameters['SoC'] - BESS_discharge, 0)
-            
-        #     elif BESS_parameters['Control'] == 'price_threshold':
-        #         # The BESS discharges only if the price is high enough
-        #         if price_data[timestamp] > BESS_parameters['Control setpoint']:
-        #             BESS_discharge = min(BESS_parameters['cRate'], abs(difference), BESS_parameters['SoC'])
-        #             BESS_parameters['SoC'] = max(BESS_parameters['SoC'] - BESS_discharge, 0)
-        #         else:
-        #             BESS_discharge = 0
-        #             BESS_parameters['SoC'] = max(BESS_parameters['SoC'] - BESS_discharge, 0)
-            
-        #     else: # no control defined
-        #         print('Warning: no BESS control defined!')
-        #         BESS_discharge = 0
-        #         BESS_parameters['SoC'] = max(BESS_parameters['SoC'] - BESS_discharge, 0)
-        
+       
         # removing the BESS charge/discharge from the difference
         difference = difference - BESS_charge + BESS_discharge
 
@@ -447,33 +407,37 @@ def load_shift_day_ahead(timestamp, difference, load_list, price_data, peak_limi
     Function to perform the load shifting operations. When there is excess generation, we want to shift load towards the current time step, so we maximise
     self-consumption and reduce the amount of load imported from the grid. When there is no excess generation, we want to verify if we are consuming at
     lowest possible price, and thus check if we can shift load away from this timestamp to a cheaper time.
-
+    
+    We consider that all loads can be shifted back/forth, meaning that at each timestamp we will look into loads from the "past" and "future" to shift.
+    Hence why "day_ahead": we are considering that these operations are performed with a bird's eye view of upcoming data, and full power to shift
+    loads that haven't happened yet.
+    
     Parameters
     ----------
     difference : float
         Amount of energy available in the microgrid. Difference between local generation, BESS_io, demand...
-    newload : array
-        Array of floats that represent the new, changed demand of the microgrid accounting for its flexibility.
     timestamp : int
         Current time step of the simulation.
-    pairs : list
-        List of tuples that associate the current time step with the possible time steps for flexibility.
-        Calculated with flexibility_curve.
-    load_shift : array
-        Array that indicates whether there was a load shift at the current time step. Used for tracking purposes.
-    flexibility_curve : array
-        Flexibility curve that gives an interval of how many time steps the load can be shifted to/from.
+    load_list: list
+        List of Load objects.
     price_data : array
         Array with the prices for each time step of the simulation.
+    peak_limit: float
+        The load limit at each timestamp, to avoid the creation of too large power peaks.
+    gen_shift: Bool
+        If we want to shift loads to maximise self-consumption and self-sufficiency. Default True.
+    spot_price_following: Bool
+        If we want to shift loads to minimise grid import costs, following the spot-price. Default True.
 
     Returns
     -------
     difference : float
         Amount of energy available in the microgrid after the load shifting operation.
-    newload : array
-        Array of the demand after the load shifting operation. The demand in the current time step may have been modified.
+    load_list: list
+        List of Load objects, with their "newload" parameters modified after load shifting.
     """
     
+    # When we have excess generation
     if difference >= 0 and gen_shift == True:
         # we want to perform a load shift TOWARDS this time to increase the self-consumption
         
@@ -534,9 +498,7 @@ def load_shift_day_ahead(timestamp, difference, load_list, price_data, peak_limi
                 # If we are doing it in real-time, we can only shift future loads. But that's not the case for now!
                 # However, we can't change the past loads, so we can only shift the current load to a future timestamp
                 #times_to_shift = [item for item in pairs[timestamp][1] if item > timestamp]
-                
-                
-                
+
                 # what is the current price
                 current_price = price_data[timestamp]
                 # We want to get the prices of all these timestamps to see when it is the lowest price in this interval
@@ -583,27 +545,62 @@ def load_shift_day_ahead(timestamp, difference, load_list, price_data, peak_limi
     return difference, load_list
 
 
-# Function to implement this
-def mg_day_ahead_shifting(gen_data, load_list, total_demand_after_shift, price_data, peak_limit):
 
+def mg_day_ahead_operation(load_list, BESS_parameters, EV_list, gen_data, total_demand_after_shift, price_data, peak_limit, price_threshold, minute_intervals):
+    """
+    
+
+    Parameters
+    ----------
+    load_list : List
+        List of Load objects.
+    BESS_parameters : Dict
+        Dictionary with the parameters of the BESS.
+    EV_list : List
+        List of EV objects.
+    gen_data : Array
+        Array of floats representing the generation available in the microgrid at each timestamp.
+    total_demand_after_shift : Array
+        Total demand, summing the consumption of all loads.
+    price_data : Array
+        Array with the spot-prices.
+    peak_limit : Float
+        Limit for peak powers.
+    price_threshold : Float
+        Value (in EUR) which is considered expensive enough to activate the BESS/EV discharging.
+    minute_intervals : Int
+        Simulation time-step, 15-minute or 60-minute intervals.
+
+    Returns
+    -------
+    load_list : List
+        List of Load objects, now modified with their "newload" parameter indicating the load shifts.
+    total_demand_after_shift : Array
+        Total demand of the microgrid loads, after the load shifting.
+    BESS_SoC : List
+        List of floats with the BESS SoC for each time-step
+    BESS_io : List
+        List of floats with the BESS charge/discharge for each time-step.
+    EV_list : List
+        List of EV objects with their parameters (SoC, charge/discharge) updated.
+    grid_io : List
+        List of floats with the grid import/export.
+    """
+    
     for timestamp in range(len(gen_data)):
           
         ###### I: check excess generation  
         difference = gen_data[timestamp] - total_demand_after_shift[timestamp]
         
-        ##### II: Load shifting
+        ##### II: Perform the load shifting
         
         difference, load_list = load_shift_day_ahead(timestamp, difference, load_list, price_data, peak_limit)
         
         # Readjusting the total demand after the load shift
         total_demand_after_shift = np.sum([load.newload for load in load_list], axis=0)
             
-        return load_list, total_demand_after_shift
 
-
-
-def mg_day_ahead_operation(BESS_parameters, EV_list, gen_data, total_demand_after_shift, price_data, price_threshold, minute_intervals):
-    
+    # After shifting the loads, we can also address the other assets in the microgrid
     # initialising simulation values
     grid_io, BESS_SoC, BESS_io = [], [], []
     for timestamp in range(len(gen_data)):
@@ -626,62 +623,82 @@ def mg_day_ahead_operation(BESS_parameters, EV_list, gen_data, total_demand_afte
         # V: Setting the grid import/export behaviour
         grid_import, grid_export, grid_io = grid_behaviour(difference, grid_io)
         
-        # # V: Calculating the available flexibility in the microgrid at each timestamp
-        
-        # # BESS can up/down regulate by charging/discharging
-        # BESS_up.append(min(BESS_parameters['SoC'], BESS_parameters['cRate']))
-        # BESS_down.append(min(BESS_parameters['capacity'] - BESS_parameters['SoC'], BESS_parameters['cRate']))
-        # # The BESS can also up/down regulate by just shifting the time which it charge/discharge
-        # BESS_shift.append(BESS_io)
-        
-        
-        # # Generation can only up-regulate by injecting power to the grid, and down-regulating by not injecting power to the grid (curtailing)
-        # if difference > 0:
-        #     gen_up.append(difference)
-        #     gen_down.append(difference)
-        # else:
-        #     gen_up.append(0)
-        #     gen_down.append(0)
-        
-        
-        # # EV can up/down regulate by charging/discharging (if V2G is enabled) - and only if it is plugged!
-        # if EV_plugged[timestamp] == 1:
-        #     if (EV_parameters['V2G'] == True) and (EV_parameters['SoC'] > EV_parameters['discharge threshold'][0]*EV_parameters['capacity']):
-        #         EV_up.append(min(EV_parameters['cRate'], (EV_parameters['SoC'] - EV_parameters['discharge threshold'][1]*EV_parameters['capacity'])))
-        #     else:
-        #         EV_up.append(0)
-            
-        #     EV_down.append(min(EV_parameters['capacity'] - EV_parameters['SoC'], EV_parameters['cRate']))
-        #     EV_shift.append(EV_io)
-        # else:
-        #     EV_up.append(0); EV_down.append(0); EV_shift.append(0)
-        
-        
-        # # Load flexibility
-        
-        # # up-regulation: reducing the load
-        # # Was the load already shifted?
-        # if load_shift[timestamp] < 0:
-        #     load_up.append(0)
-        # else:
-        #     load_up.append(newload[timestamp] - flexibility_curve[timestamp]*newload[timestamp])
-        
-        
-        # # down-regulation: increasing the load
-        # # which timestamps the load can be moved FROM?
-        # # Calculating the timestamp range (from flexibility curve) from which timestamps could be shifted
-        # idx_shiftable_loads = [pair[0] for pair in pairs if timestamp in pair[1]]
-        # # However, we can't alter the past, so we can only get indexes which are larget than timestamp
-        # idx_shiftable_loads = [element for element in idx_shiftable_loads if element > timestamp]
-        
-        # maxload_timestamp = newload[timestamp]
-        # for idx in idx_shiftable_loads:
-        #     if load_shift[idx] >= 0:
-        #         maxload_timestamp = maxload_timestamp + flexibility_curve[timestamp]*newload[idx]
-        
-        # load_down.append(maxload_timestamp)
+
     
-    return BESS_SoC, BESS_io, EV_list, grid_io 
+    return load_list, total_demand_after_shift, BESS_SoC, BESS_io, EV_list, grid_io 
+
+
+
+
+
+
+# %% CALCULATING AVAILABLE FLEXIBILITY (TO-DO)
+
+
+
+# Flexibility availability calculation
+# BESS_up, BESS_down, BESS_shift = [],[],[]
+# gen_up, gen_down = [], []
+# EV_up, EV_down, EV_shift = [],[],[]
+# load_up, load_down = [], []
+# # V: Calculating the available flexibility in the microgrid at each timestamp
+
+# # BESS can up/down regulate by charging/discharging
+# BESS_up.append(min(BESS_parameters['SoC'], BESS_parameters['cRate']))
+# BESS_down.append(min(BESS_parameters['capacity'] - BESS_parameters['SoC'], BESS_parameters['cRate']))
+# # The BESS can also up/down regulate by just shifting the time which it charge/discharge
+# BESS_shift.append(BESS_io)
+
+
+# # Generation can only up-regulate by injecting power to the grid, and down-regulating by not injecting power to the grid (curtailing)
+# if difference > 0:
+#     gen_up.append(difference)
+#     gen_down.append(difference)
+# else:
+#     gen_up.append(0)
+#     gen_down.append(0)
+
+
+# # EV can up/down regulate by charging/discharging (if V2G is enabled) - and only if it is plugged!
+# if EV_plugged[timestamp] == 1:
+#     if (EV_parameters['V2G'] == True) and (EV_parameters['SoC'] > EV_parameters['discharge threshold'][0]*EV_parameters['capacity']):
+#         EV_up.append(min(EV_parameters['cRate'], (EV_parameters['SoC'] - EV_parameters['discharge threshold'][1]*EV_parameters['capacity'])))
+#     else:
+#         EV_up.append(0)
+    
+#     EV_down.append(min(EV_parameters['capacity'] - EV_parameters['SoC'], EV_parameters['cRate']))
+#     EV_shift.append(EV_io)
+# else:
+#     EV_up.append(0); EV_down.append(0); EV_shift.append(0)
+
+
+# # Load flexibility
+
+# # up-regulation: reducing the load
+# # Was the load already shifted?
+# if load_shift[timestamp] < 0:
+#     load_up.append(0)
+# else:
+#     load_up.append(newload[timestamp] - flexibility_curve[timestamp]*newload[timestamp])
+
+
+# # down-regulation: increasing the load
+# # which timestamps the load can be moved FROM?
+# # Calculating the timestamp range (from flexibility curve) from which timestamps could be shifted
+# idx_shiftable_loads = [pair[0] for pair in pairs if timestamp in pair[1]]
+# # However, we can't alter the past, so we can only get indexes which are larget than timestamp
+# idx_shiftable_loads = [element for element in idx_shiftable_loads if element > timestamp]
+
+# maxload_timestamp = newload[timestamp]
+# for idx in idx_shiftable_loads:
+#     if load_shift[idx] >= 0:
+#         maxload_timestamp = maxload_timestamp + flexibility_curve[timestamp]*newload[idx]
+
+# load_down.append(maxload_timestamp)
+
+
+
+
 
 
 # %% GRID-RELATED FUNCTIONS:

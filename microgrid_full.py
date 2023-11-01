@@ -15,11 +15,9 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-import copy
-# We need to create "Deep copies" of our arrays at some point in the code, hence why we import this module
 
-import STRATA_functions as fn
-import STRATA_mg_functions as mg
+import support_functions as fn
+import mg_operations as mg
 import mg_classes as cl
 
 # %% DATA IMPORT
@@ -202,12 +200,6 @@ EV_list = [EV1, EV2]
 
 
 
-# Flexibility availability calculation
-# BESS_up, BESS_down, BESS_shift = [],[],[]
-# gen_up, gen_down = [], []
-# EV_up, EV_down, EV_shift = [],[],[]
-# load_up, load_down = [], []
-
 ### TO-DO: Power-based tariffs!
 ### TO-DO: Monte Carlo simulation
 ### TO-DO: Calculate available flexibility at each timestamp
@@ -219,13 +211,11 @@ peak_limit = np.max(load1.newload)
 # "day-ahead" meaning that we perform load shifts from past and future timestamps, with a full-picture, as 
 # opposed to being able to shift only future loads (and not past loads)
 
-load_list, total_demand_after_shift = mg.mg_day_ahead_shifting(gen_data, load_list, total_demand_after_shift, price_data, peak_limit)
-  
-# And we now have the load shifts incorporated into the load objects and in the total demand
-# We can now perform the microgrid operations for the day-ahead
+load_list, total_demand_after_shift, BESS_SoC, BESS_io, EV_list, grid_io = mg.mg_day_ahead_operation(load_list, BESS_parameters, 
+                                                                                                     EV_list, gen_data, total_demand_after_shift, 
+                                                                                                     price_data, peak_limit, price_threshold, 
+                                                                                                     minute_intervals)
 
-BESS_SoC, BESS_io, EV_list, grid_io = mg.mg_day_ahead_operation(BESS_parameters, EV_list, gen_data, total_demand_after_shift, price_data, 
-                                                                price_threshold, minute_intervals)
 
 # %%  Assigning values to a dataframe for easier inspection
 
