@@ -216,7 +216,7 @@ def define_flexibility(number_days, minute_intervals, load_data, plot=False):
     #                      2, 2, 3, 4, 4, 4 # evening, 18:00 to 23:00
     #                      ] * (number_days)
     
-    flexibility_window = [4] * 24 * number_days
+    flexibility_window = [2] * 24 * number_days
     
     flexibility_window = np.repeat(flexibility_window, 60/minute_intervals)
 

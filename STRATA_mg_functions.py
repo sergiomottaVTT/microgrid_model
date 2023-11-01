@@ -272,7 +272,7 @@ def load_shift_behaviour (difference, newload, load_data, timestamp, pairs, load
         # Calculating the timestamp range (from flexibility curve) from which timestamps could be shifted
         idx_shiftable_loads = [pair[0] for pair in pairs if timestamp in pair[1]]
         # However, we can't alter the past, so we can only get indexes which are larget than timestamp
-        idx_shiftable_loads = [element for element in idx_shiftable_loads if element > timestamp]
+        #idx_shiftable_loads = [element for element in idx_shiftable_loads if element > timestamp]
         
         # Performing the shifts from upcoming timestamps
         for i in range(len(idx_shiftable_loads)):
@@ -336,6 +336,126 @@ def load_shift_behaviour (difference, newload, load_data, timestamp, pairs, load
 
 
     return difference, newload, load_shift
+
+
+
+
+
+
+
+
+
+
+# BACKUP
+# def load_shift_behaviour (difference, newload, load_data, timestamp, pairs, load_shift, flexibility_curve, price_data):
+#     """
+#     Function to perform the load shifting operations. When there is excess generation, we want to shift load towards the current time step, so we maximise
+#     self-consumption and reduce the amount of load imported from the grid. When there is no excess generation, we want to verify if we are consuming at
+#     lowest possible price, and thus check if we can shift load away from this timestamp to a cheaper time.
+
+#     Parameters
+#     ----------
+#     difference : float
+#         Amount of energy available in the microgrid. Difference between local generation, BESS_io, demand...
+#     newload : array
+#         Array of floats that represent the new, changed demand of the microgrid accounting for its flexibility.
+#     timestamp : int
+#         Current time step of the simulation.
+#     pairs : list
+#         List of tuples that associate the current time step with the possible time steps for flexibility.
+#         Calculated with flexibility_curve.
+#     load_shift : array
+#         Array that indicates whether there was a load shift at the current time step. Used for tracking purposes.
+#     flexibility_curve : array
+#         Flexibility curve that gives an interval of how many time steps the load can be shifted to/from.
+#     price_data : array
+#         Array with the prices for each time step of the simulation.
+
+#     Returns
+#     -------
+#     difference : float
+#         Amount of energy available in the microgrid after the load shifting operation.
+#     newload : array
+#         Array of the demand after the load shifting operation. The demand in the current time step may have been modified.
+
+#     """
+    
+#     spot_price_following = True
+    
+#     # There is excess generation -- can we shift some later load to be used now?
+#     # i.e., we are shifting load TOWARDS this timestamp
+#     if difference >= 0:
+                     
+#         # Calculating the timestamp range (from flexibility curve) from which timestamps could be shifted
+#         idx_shiftable_loads = [pair[0] for pair in pairs if timestamp in pair[1]]
+#         # However, we can't alter the past, so we can only get indexes which are larget than timestamp
+#         idx_shiftable_loads = [element for element in idx_shiftable_loads if element > timestamp]
+        
+#         # Performing the shifts from upcoming timestamps
+#         for i in range(len(idx_shiftable_loads)):
+    
+#             if (difference > 0) and (newload[timestamp] < np.max(newload)) and \
+#                 (load_shift[idx_shiftable_loads[i]] >= 0):
+#                 # How much load can be shifted from this first timestamp [i]
+#                 load_shifted = newload[idx_shiftable_loads[i]]*flexibility_curve[idx_shiftable_loads[i]]
+                
+#                 # we don't want to create any new peaks in the consumption
+#                 if (newload[timestamp] + load_shifted) > np.max(newload):
+#                     excess = newload[timestamp] + load_shifted - np.max(newload)
+#                     load_shifted = load_shifted - excess
+                    
+#                 newload[timestamp] = newload[timestamp] + load_shifted
+#                 newload[idx_shiftable_loads[i]] = newload[idx_shiftable_loads[i]] - load_shifted
+#                 # marking that there was a load shift executed here and timestamp has extra load
+#                 load_shift[timestamp] = load_shift[timestamp] + 1 # shift TO here
+#                 load_shift[idx_shiftable_loads[i]] = load_shift[idx_shiftable_loads[i]] - 1 # shift FROM here
+#                 # removing this extra load shifted from the difference (positive)
+#                 difference = difference - load_shifted
+        
+#     # There is no excess generation -- can we shift some load to a cheaper time? 
+#     # i.e., we are shifting load AWAY from this timestamp
+#     else: 
+               
+#         # How much load can we shift? We can't shift more than the flexibility limit of the load
+#         load_shifted = min(flexibility_curve[timestamp]*newload[timestamp], abs(difference))
+#         # we check if this load can and should be shifted somehow to another time
+#         if (load_shift[timestamp] >= 0) and (spot_price_following == True):   # we can only shift load AWAY it if it wasn't shifted AWAY before
+#             # We get which are the timestamps to where the load can be shifted
+#             # However, we can't change the past loads, so we can only shift the current load to a future timestamp
+#             times_to_shift = [item for item in pairs[timestamp][1] if item > timestamp]
+#             # what is the current price
+#             current_price = price_data[timestamp]
+#             # We want to get the prices of all these timestamps to see when it is the lowest price in this interval
+#             prices_window = price_data[times_to_shift]
+            
+#             # are there any times in the shifting window that would have smaller prices?
+#             smaller_prices = [price for price in prices_window if price < current_price]
+#             if len(smaller_prices) >= 1:
+#                 # if there are smaller prices in the window, where is the minimum?
+#                 index_of_min_price = np.where(prices_window == (min(smaller_prices)))[0][0]
+
+#                 # we don't want to create any new peaks in the consumption
+#                 if (newload[times_to_shift[index_of_min_price]] + load_shifted) > np.max(newload):
+#                     excess = newload[times_to_shift[index_of_min_price]] + load_shifted - np.max(newload)
+#                     load_shifted = load_shifted - excess
+                
+#                 # then we perform the load shift
+#                 newload[times_to_shift[index_of_min_price]] = newload[times_to_shift[index_of_min_price]] +\
+#                     load_shifted
+                
+#                 newload[timestamp] = newload[timestamp] - load_shifted
+                
+#                 # and let's mark that the load was shifted (can't be shifted again), and the remaining load at timestamp is smaller (difference is negative)
+#                 difference = difference + load_shifted 
+#                 load_shift[timestamp] = load_shift[timestamp] - 1 # shifted FROM here
+#                 load_shift[times_to_shift[index_of_min_price]] = load_shift[times_to_shift[index_of_min_price]] + 1 #shifted TO here
+
+
+
+#     return difference, newload, load_shift
+
+
+
 
 
 # %% GRID-RELATED FUNCTIONS:
