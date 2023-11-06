@@ -32,7 +32,7 @@ number_days = 1
 minute_intervals = 60
 
 # Load shifting is implemented
-load_shifting = True
+load_shifting = False
 # Price to be considered as "expensive" and thus worth it to discharge BESS/EV/load shift
 price_threshold = 0.05
 
@@ -43,11 +43,11 @@ load_data = load_data * houses
 ### TO-DO: separate the loads!
 
 # PV system
-PV_installed_capacity = 50.0 #kWp
+PV_installed_capacity = 0.0 #kWp
 gen_data = gen_data * PV_installed_capacity #gen_data in kW
 
 # BESS
-BESS_parameters = {'capacity': 10, #capacity in kWh
+BESS_parameters = {'capacity': 0, #capacity in kWh
                    'cRate': 1.5, #charge/discharge rate in kW
                    'SoC': 0.0, # initial SoC
                    'Control': 'price_threshold', #the type of control for the battery, will discharge when threshold is above setpoint
@@ -58,8 +58,8 @@ BESS_parameters = {'capacity': 10, #capacity in kWh
 
 # EVs
 EV_parameters = {'number': 1,   # How many EVs connected to the microgrid
-                 'capacity': 20, #capacity
-                 'SoC': 20,     # initial SoC
+                 'capacity': 00, #capacity
+                 'SoC': 00,     # initial SoC
                  'cRate': 0.5,   #charging rate of the charging station
                  'V2G': True,   #enabling V2G
                  'discharge threshold': (0.85, 0.6),    #can only be discharged if SoC > 85% capacity, down to 60% of capacity
@@ -166,9 +166,9 @@ def generate_random_curves(data, number_of_curves, variance, plotting=True):
 
 # Load objects are created with deep copies of the load array. Deep copies allow us to copy the full array, i.e. create a copy also of the objects
 # within the array. A "shallow copy" copies only the array and references to objects contained within the original array!
-load1 = cl.Load(load_data, load_data, True)
-load2 = cl.Load(load_data*0.5, load_data*0.5, True)
-load3 = cl.Load(load_data*0.3, load_data*0.3, True)
+load1 = cl.Load(load_data, load_data, load_shifting)
+load2 = cl.Load(load_data*0.5, load_data*0.5, load_shifting)
+load3 = cl.Load(load_data*0.3, load_data*0.3, load_shifting)
 
 # Setting the load flexibility behaviour
 load1.define_flexibility(number_days, minute_intervals, plot=False)
@@ -226,9 +226,9 @@ total_EV_io = np.sum([ev.EV_io for ev in EV_list], axis=0)
 checksum = total_demand_after_shift - gen_data + BESS_io + total_EV_io + grid_io
 
 if np.sum(checksum) != 0:
-    print('Warning! Something strange in the microgrid, energy is leaking somewhere...')
+    print('## Warning! Something strange in the microgrid, energy is leaking somewhere...##')
 else:
-    print("Microgrid operating as expected")
+    print("\n## Microgrid operating as expected ##\n")
 # Assigning loads to the dataframe
   
 
@@ -256,28 +256,48 @@ for i, ev in enumerate(EV_list, start=1):
     microgrid_data[f'EV{i} plugged'] = ev.plugged_array
 
 
-microgrid_simulation = pd.DataFrame(microgrid_data, index=time_range)
+microgrid_simulation = pd.DataFrame(microgrid_data, index=pd.to_datetime(time_range, format='%d-%m-%Y %H:%M'))
 
 
 
 # %% Evaluating results
 
-#savings, benefit, self_sufficiency, self_consumption = fn.result_eval(microgrid_simulation, minute_intervals)
+import matplotlib.dates as md
 
-#microgrid_simulation.plot()
+fig, ax = plt.subplots()
+ax.plot(microgrid_simulation.index, microgrid_simulation['Total demand'], label='Original demand')
+ax.plot(microgrid_simulation.index, microgrid_simulation['Total demand_shift'], label='Demand after shift')
+ax.plot(microgrid_simulation.index, microgrid_simulation['Grid import/export'], label='Grid import/export')
+ax.set_title('Original demand x Shifted demand')
+ax.set_xlabel('Time')
+ax.set_ylabel('Energy (kWh)')
+ax.xaxis.set_major_locator(md.HourLocator(interval=5))
+ax.xaxis.set_major_formatter(md.DateFormatter('%H:%M'))
+plt.setp(ax.xaxis.get_majorticklabels(), rotation=45)
+ax.legend()
 
-# %%
 
-# plt.figure()
-# plt.plot(newload)
-# plt.plot(load_up)
-# plt.plot(load_down)
+# %% 
 
-# # %% 
 
-# plt.figure()
-# plt.plot(load_data)
-# plt.plot(grid_io)
+
+KPI_scss, KPI_econ = fn.mg_eval(microgrid_simulation, minute_intervals)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

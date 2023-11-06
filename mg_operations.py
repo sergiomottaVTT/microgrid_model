@@ -442,40 +442,41 @@ def load_shift_day_ahead(timestamp, difference, load_list, price_data, peak_limi
         # we want to perform a load shift TOWARDS this time to increase the self-consumption
         
         for load in load_list:
-            # Calculating the timestamp range (from flexibility curve) from which timestamps could be shifted
-            idx_shiftable_loads = [pair[0] for pair in load.pairs if timestamp in pair[1]]
-            
-            # Since we are not doing the load shifting in real-time, but rather 
-            # We do it time-based, not price-based. I.e. we are shifting the first load that we can from a timestamp perspective
-            for i in range(len(idx_shiftable_loads)):
+            if load.shifting == True:
+                # Calculating the timestamp range (from flexibility curve) from which timestamps could be shifted
+                idx_shiftable_loads = [pair[0] for pair in load.pairs if timestamp in pair[1]]
                 
-                if (difference > 0) and (load.newload[timestamp] <= peak_limit):
+                # Since we are not doing the load shifting in real-time, but rather 
+                # We do it time-based, not price-based. I.e. we are shifting the first load that we can from a timestamp perspective
+                for i in range(len(idx_shiftable_loads)):
                     
-                    # amount of load that will be shifted
-                    load_shifted = load.newload[idx_shiftable_loads[i]] * load.flexibility_curve[idx_shiftable_loads[i]]
-            
-                    # A check to avoid the creation of new peaks in the consumption
-                    if (load.newload[timestamp] + load_shifted) > peak_limit:
-                        excess = load.newload[timestamp] + load_shifted - peak_limit
-                        load_shifted = load_shifted - excess
-            
-                    # Then we shift the load
-                    #print('Load that will be shifted:', load_shifted)
-                    #print('Shifted from:', idx_shiftable_loads[i])
-                    
-                    # Adding the shifted load to the timestamp
-                    load.newload[timestamp] = load.newload[timestamp] + load_shifted
-                    
-                    # And removing it from where it came from
-                    load.newload[idx_shiftable_loads[i]] = load.newload[idx_shiftable_loads[i]] - load_shifted
-                    
-                    # And marking that the load was shifted
-                    load.load_shift[timestamp].append(('gen/to', idx_shiftable_loads[i])) # TO (1) timestamp FROM idx_shiftable_loads[i]
-                    load.load_shift[idx_shiftable_loads[i]].append(('gen/from', timestamp)) #FROM (-1) idx_shiftable_loads[i] TO timestamp
-                    
-                    # And the difference is now updated
-                    difference = difference - load_shifted
-                    #print('Updated difference:', difference)
+                    if (difference > 0) and (load.newload[timestamp] <= peak_limit):
+                        
+                        # amount of load that will be shifted
+                        load_shifted = load.newload[idx_shiftable_loads[i]] * load.flexibility_curve[idx_shiftable_loads[i]]
+                
+                        # A check to avoid the creation of new peaks in the consumption
+                        if (load.newload[timestamp] + load_shifted) > peak_limit:
+                            excess = load.newload[timestamp] + load_shifted - peak_limit
+                            load_shifted = load_shifted - excess
+                
+                        # Then we shift the load
+                        #print('Load that will be shifted:', load_shifted)
+                        #print('Shifted from:', idx_shiftable_loads[i])
+                        
+                        # Adding the shifted load to the timestamp
+                        load.newload[timestamp] = load.newload[timestamp] + load_shifted
+                        
+                        # And removing it from where it came from
+                        load.newload[idx_shiftable_loads[i]] = load.newload[idx_shiftable_loads[i]] - load_shifted
+                        
+                        # And marking that the load was shifted
+                        load.load_shift[timestamp].append(('gen/to', idx_shiftable_loads[i])) # TO (1) timestamp FROM idx_shiftable_loads[i]
+                        load.load_shift[idx_shiftable_loads[i]].append(('gen/from', timestamp)) #FROM (-1) idx_shiftable_loads[i] TO timestamp
+                        
+                        # And the difference is now updated
+                        difference = difference - load_shifted
+                        #print('Updated difference:', difference)
          
                     
         # Seeing how the loads evolve in each timestep
@@ -488,7 +489,7 @@ def load_shift_day_ahead(timestamp, difference, load_list, price_data, peak_limi
         for load in load_list:
             #print('Load being processed!---')
             # How much load can we shift? We can't shift more than the flexibility limit of the load
-            if (load.newload[timestamp] >= load.load[timestamp] - (load.flexibility_curve[timestamp] * load.load[timestamp])) and (spot_price_following == True):
+            if (load.newload[timestamp] >= load.load[timestamp] - (load.flexibility_curve[timestamp] * load.load[timestamp])) and (load.shifting == True):
                 # The amount of load we can shift is then
                 load_shifted = min(load.flexibility_curve[timestamp]*load.newload[timestamp], abs(difference))
                 
@@ -548,8 +549,20 @@ def load_shift_day_ahead(timestamp, difference, load_list, price_data, peak_limi
 
 def mg_day_ahead_operation(load_list, BESS_parameters, EV_list, gen_data, total_demand_after_shift, price_data, peak_limit, price_threshold, minute_intervals):
     """
+    Function to perform the microgrid operations in a "day-ahead" manner. That is, we are aware of the load, generation, and price well in advance
+    and can control whether loads will be shifted forward or backwards in time (to an earlier or later time). 
     
-
+    The load shift is performed in advance, then with the new information about the loads, the BESS and EVs are charged, and grid import/export is calculated.
+    It is necessary to perform it like that because when we have loads shifting to earlier times, we are modifying a load value an an earlier timestamp,
+    after we already ran through it in the for loop. Thus, we couldn't get consistent values for BESS, EV, and grid behaviours for each timestamp as the load
+    values would change afterwards.
+    
+    There may be a better way to do this - probably there is - but for now this is how we operate the microgrid.
+    1) perform the load shifting
+    2) perform the BESS charging
+    3) Perform the EV charging
+    4) Calculate grid import/export
+    
     Parameters
     ----------
     load_list : List
@@ -726,7 +739,6 @@ def grid_behaviour (difference, grid_io):
 
     """
     
-
 
 # TODO: implement the grid availability and VoLL calculations
 

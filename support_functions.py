@@ -106,7 +106,7 @@ def modify_data(load_data, gen_data, price_data, number_days, minute_intervals, 
     elif minute_intervals == 15:
         time_range = pd.date_range(start=start_time, periods=24*4*number_days, freq='15T')
     
-    time_range = time_range.strftime("%d-%m %H:%M")
+    time_range = time_range.strftime("%d-%m-%Y %H:%M")
     
     if plotting == True:
     #### If we want to see how the load, generation, and prices look like
@@ -132,77 +132,113 @@ def modify_data(load_data, gen_data, price_data, number_days, minute_intervals, 
 
 # %% Result evaluation
 
-def result_eval(microgrid_simulation, minute_intervals, show_costs=True, show_energy=True):
+
+def mg_eval(microgrid_simulation, minute_intervals, sc=True, ss=True, econ=True):
     """
-    Function to calculate and show summary results on economic analysis and energy consumption.
+    Function to evaluate the KPIs and economic behaviour of the microgrid (cost savings due to load shifting and self-consumption)
 
     Parameters
     ----------
-    microgrid_simulation : dataframe
-        Dataframe with the microgrid simulation results per timestamp.
-    minute_intervals : int
-        The time frequency of the array, 1-hour time intervals or 15-minute time intervals.
-    show_costs : Bool, optional
-        Whether the function should output the printed costs. The default is True.
-    show_energy : Bool, optional
-        Whether the function should output the energy calculations. The default is True.
+    microgrid_simulation : Dataframe
+        Dataframe with the microgrid operation per timestamp.
+    minute_intervals : Int
+        Frequency of the timestamps.
+    sc : Bool, optional
+        Bool to define whether we want to see the output of self-consumption calculations. The default is True.
+    ss : Bool, optional
+        Bool to define whether we want to see the output of self-sufficiency calculations. The default is True.
+    econ : Bool, optional
+        Bool to define whether we want to see the output of economic calculations. The default is True.
 
     Returns
     -------
-    savings : float
-        How much money was saved in energy imports.
-    benefit : float
-        Total economic benefit: savings + energy exports.
-    self_sufficiency: float
-        How much of the total energy needs are supplied by the microgrid assets versus the imported from the grid.
-    self_consumption: float
-        How much of the energy produced locally is used against how much is exported.
+    KPI_scss : Dict
+        Dictionary with the calculated values for the KPIs.
+    KPI_econ : Dict
+        Dictionary with the calculated values for economic costs and income.
+    """
+    # self-consumption
+    
+    # Since we have many energy storage assets that are charged/discharged with locally generated energy, the caluclation of self-consumption and self-sufficiency
+    # is slighly more challenging. We must then consider the grid imports/exports to ease this calculation.
+    
+    #self_consumption = (total generated - total exported)/total generated
+    
+    total_gen = microgrid_simulation['Generation'].sum() * minute_intervals/60
+    total_export = microgrid_simulation['Grid import/export'][microgrid_simulation['Grid import/export'] > 0].sum() * minute_intervals/60
+    
+    self_consumption = (total_gen - total_export)/total_gen
 
-    """ 
-    # Costs
-    original_cost = np.sum(microgrid_simulation['Original Load'] * microgrid_simulation['Price data']) / (60 / minute_intervals)
+    if sc == True:
+        print('The total self-consumption of the microgrid was {:.2f}%'.format(self_consumption * 100))
+        print('The total exports to the grid were {:.2f} kWh'.format(total_export))
+        print('And the total generation was {:.2f} kWh'.format(microgrid_simulation['Generation'].sum()))
     
-    grid_io_prices = microgrid_simulation['Grid import/export'] * microgrid_simulation['Price data']
-    import_costs = abs(np.sum(grid_io_prices[grid_io_prices < 0]) / (60 / minute_intervals))
-    export_income = np.sum(grid_io_prices[grid_io_prices >= 0]) / (60 / minute_intervals)
+    total_consumption_loads = microgrid_simulation['Total demand_shift'].sum() * minute_intervals/60
+    total_consumption_BESS = microgrid_simulation['BESS charge/discharge'].sum() * minute_intervals/60
+    total_consumption_EVs = np.sum(microgrid_simulation[[col for col in microgrid_simulation.columns if 'I/O' in col]].sum()) * minute_intervals/60
     
-    savings = original_cost - import_costs
-    benefit = savings + export_income
+    total_consumption = total_consumption_loads + total_consumption_BESS + total_consumption_EVs
     
-    # Energy use
-    original_energy_grid = np.sum(microgrid_simulation['Original Load']) / (60 / minute_intervals)
-    new_energy_grid = abs(np.sum(microgrid_simulation['Grid import/export'][microgrid_simulation['Grid import/export'] < 0]) / ( 60 / minute_intervals))
-    exported_energy = np.sum(microgrid_simulation['Grid import/export'][microgrid_simulation['Grid import/export'] >= 0]) / ( 60 / minute_intervals)
+    total_import = abs(microgrid_simulation['Grid import/export'][microgrid_simulation['Grid import/export'] < 0].sum()) * minute_intervals/60
     
-    original_consumed_energy_excess_gen = np.sum(microgrid_simulation['Original Load'].loc[microgrid_simulation['Generation'] 
-                                                                                           > microgrid_simulation['Original Load']]) / (60 / minute_intervals)
-    energy_self_consumed = np.sum(microgrid_simulation['New Load'].loc[microgrid_simulation['Generation'] 
-                                                                                           > microgrid_simulation['Original Load']]) / (60 / minute_intervals)
     
-    # Other KPIs
-    self_sufficiency = 1 - abs(np.sum(microgrid_simulation['Grid import/export']
-                                      [microgrid_simulation['Grid import/export'] < 0])) / np.sum(microgrid_simulation['New Load'])
-    self_consumption = 1 - np.sum(microgrid_simulation['Grid import/export']
-                                  [microgrid_simulation['Grid import/export'] >= 0])/np.sum(microgrid_simulation['Generation'])
+    self_sufficiency = (total_consumption - total_import)/total_consumption
     
-    ####### Printing
-    if show_costs == True:
-        print('Original costs: {:.2f} EUR'.format(original_cost))
-        print('New import costs: {:.2f} EUR'.format(import_costs))
-        print('Savings due to microgrid: {:.2f} EUR'.format(savings))
-        
-        print('Export income: {:.2f} EUR'.format(export_income))
-        print('Total benefit: {:.2f} EUR'.format(benefit))
+    if ss == True:
+        print('The total self-sufficiency of the microgrid was {:.2f}%'.format(self_sufficiency * 100))
+        print('The total load consumed was {:.2f} kWh'.format(total_consumption))
+        print('The total imports from the grid were {:.2f} kWh'.format(total_import))
+    
+    KPI_scss = {'total_gen': total_gen,
+          'total_export': total_export,
+          'consumption_loads': total_consumption_loads,
+          'consumption_BESS': total_consumption_BESS,
+          'consumption_EV': total_consumption_EVs,
+          'consumption': total_consumption,
+          'import': total_import,
+          'export': total_export,
+          'self_consumption': self_consumption,
+          'self-sufficiency': self_sufficiency}
+    
+    # Calculating the costs
+    # We should calculate costs in a generic way
+    
+    # Costs with the loads (regardless of local generation, storage, etc.)
+    
+    load_costs = np.sum(microgrid_simulation['Total demand_shift'] * microgrid_simulation['Price data']) * minute_intervals/60
+    
+    # BESS charging costs
+    BESS_costs = np.sum(microgrid_simulation['BESS charge/discharge'][microgrid_simulation['BESS charge/discharge'] > 0] 
+                        * microgrid_simulation['Price data']) * minute_intervals/60
+    
+    # EV charging costs
+    EV_costs = np.sum(microgrid_simulation[[col for col in microgrid_simulation.columns if 'I/O' in col]]
+                                                     [microgrid_simulation[[col for col in microgrid_simulation.columns if 'I/O' in col]] > 0].sum(axis=1) \
+                                                         * microgrid_simulation['Price data']) * minute_intervals/60
+    
+    # Grid import costs (should be the sum of all these)
+    grid_import_costs = abs(np.sum(microgrid_simulation['Grid import/export'][microgrid_simulation['Grid import/export'] < 0 ] 
+                               * microgrid_simulation['Price data'])) * minute_intervals/60
+    
+    # Grid export income
+    grid_export_income = abs(np.sum(microgrid_simulation['Grid import/export'][microgrid_simulation['Grid import/export'] > 0 ] 
+                               * microgrid_simulation['Price data'])) * minute_intervals/60
+    
+    if econ == True:
+        print('\n## Economic evaluation ##\n')
+        print('Load costs: {:.2f} EUR'.format(load_costs))
+        print('BESS charging costs: {:.2f} EUR'.format(BESS_costs))
+        print('EV charging costs: {:.2f} EUR'.format(EV_costs))
+        print('Grid import costs: {:.2f} EUR'.format(grid_import_costs))
+        print('Grid export income: {:.2f} EUR'.format(grid_export_income))
 
-    if show_energy == True:
-        print('Original energy use from grid: {:.2f} kWh'.format(original_energy_grid))
-        print('New energy use from grid: {:.2f} kWh'.format(new_energy_grid))
-        print('Exported energy to grid: {:.2f} kWh'.format(exported_energy))
-        
-        print('Original energy consumed during the time that we have excess gen: {:.2f} kWh'.format(original_consumed_energy_excess_gen))
-        print('Energy self-consumed: {:.2f} kWh'.format(energy_self_consumed))
+    KPI_econ = {'load costs': load_costs,
+                'BESS costs': BESS_costs,
+                'EV costs': EV_costs,
+                'grid import': grid_import_costs,
+                'grid export': grid_export_income}
 
-        print('Self-sufficiency: {:.2f}%'.format(self_sufficiency * 100))
-        print('Self-consumption: {:.2f}%'.format(self_consumption * 100))
+    return KPI_scss, KPI_econ
 
-    return savings, benefit, self_sufficiency, self_consumption
+
