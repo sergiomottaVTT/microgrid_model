@@ -22,34 +22,40 @@ import mg_classes as cl
 
 # %% DATA IMPORT
 # Importing generation and load data, setting up the parameters of microgrid components
-load_data = np.loadtxt(r'data/House1_LOADDATA_5900kWh-per-a.txt') #in kWh
+load_data = np.loadtxt(r'data/House1_LOADDATA_5000kWh-per-a.txt') #in kWh
+load_data_2 = np.loadtxt(r'data/House1_LOADDATA_5500kWh-per-a.txt')
+load_data_3 = np.loadtxt(r'data/House1_LOADDATA_6000kWh-per-a.txt')
+
 gen_data = np.loadtxt(r'data/PV_pu_data.txt') #in pu
-price_data = np.loadtxt(r'data/spotprice_oneyear.txt', usecols=2)
+price_data = np.loadtxt(r'data/spotprice_2022.txt', usecols=2)
 
 # How many days the simulation should run for
-number_days = 1
+number_days = 365
 # Setting the "sampling frequency" of the simulation: 15 minute intervals or 60 minute/hourly
-minute_intervals = 60
+minute_intervals = 15
 
 # Load shifting is implemented
 load_shifting = False
 # Price to be considered as "expensive" and thus worth it to discharge BESS/EV/load shift
+spot_price_following = False
 price_threshold = 0.05
 
-# Setting up the parameters of the microgrid components
-houses = 4
-load_data = load_data * houses
+# whether we try to optimise for self-consumption and self-sufficiency
+gen_shifting = False
 
-### TO-DO: separate the loads!
+# Setting up the parameters of the microgrid components
+houses = 8
+# If we want to have the same household loads repeated for N houses.
 
 # PV system
-PV_installed_capacity = 0.0 #kWp
+PV_installed_capacity = 00.0 #kWp
+
 gen_data = gen_data * PV_installed_capacity #gen_data in kW
 
 # BESS
-BESS_parameters = {'capacity': 0, #capacity in kWh
-                   'cRate': 1.5, #charge/discharge rate in kW
-                   'SoC': 0.0, # initial SoC
+BESS_parameters = {'capacity': 0.0, #capacity in kWh
+                   'cRate': 3.0, #charge/discharge rate in kW
+                   'SoC': 00.0, # initial SoC
                    'Control': 'price_threshold', #the type of control for the battery, will discharge when threshold is above setpoint
                    'Control setpoint': price_threshold,
                    'Grid enabled': False,
@@ -57,126 +63,71 @@ BESS_parameters = {'capacity': 0, #capacity in kWh
                    }
 
 # EVs
-EV_parameters = {'number': 1,   # How many EVs connected to the microgrid
-                 'capacity': 00, #capacity
-                 'SoC': 00,     # initial SoC
-                 'cRate': 0.5,   #charging rate of the charging station
-                 'V2G': True,   #enabling V2G
+EV_parameters = {'number': 4,   # How many EVs connected to the microgrid
+                 'capacity': 40.0, #capacity
+                 'SoC': 40.0,     # initial SoC
+                 'cRate': 20.0 * (minute_intervals/60),   #charging rate of the charging station
+                 'V2G': False,   #enabling V2G
                  'discharge threshold': (0.85, 0.6),    #can only be discharged if SoC > 85% capacity, down to 60% of capacity
                  }
 
+# EV charging rate at 20kWh = 5kW per 15 minute interval
+#scenarios = pd.read_excel('scenario_definition.xlsx', engine='openpyxl')
+
+
+#%%
 # Modifying the data to be at the right size and frequency
 load_data, gen_data, price_data, final_time, time_range = fn.modify_data(load_data, gen_data, price_data, number_days, minute_intervals)
-# Creating an array of lists to keep track of when the loads will be shifted
-#load_shift = [[] for _ in range(len(load_data))]
-# %% Estimating the flexibility for each timestamp
-
-
-# Setting load flexibility behaviour
-#flexibility_curve, flexibility_window, pairs, minload, maxload, maxload_future = fn.define_flexibility(number_days, minute_intervals, load_data, plot=False)
-
-
-# %% Monte Carlo: Generate multiple load & generation curves
-
-def exponential_moving_average(data, alpha):
-    smoothed_data = [data[0]]
-    for _ in range(1, len(data)):
-        smoothed_data.append(alpha*data[_] + (1-alpha)*smoothed_data[-1])
-    return smoothed_data
-
-
-def generate_random_curves(data, number_of_curves, variance, plotting=True):
-    
-    # We want to create N load curves with time intervals. So we will create 100 values for 00:00, 100 values for 01:00, and so forth.
-    # initialising the array that will save our data
-    random_curves = np.zeros([len(load_data), number_of_curves])
-
-    # Creating random curves with NORMAL DISTRIBUTION
-    for time in range(len(data)):
-        
-        N = number_of_curves #how many curves we want to create
-        AVG = data[time] #the mean of the normal distribution
-        STD = variance*AVG #the standard deviation of the normal distribution
-        
-        # Adding normally distributed random values for each time
-        random_curves[time, :] = np.random.normal(loc=AVG, scale=STD, size=N)
-
-    ### TO-DO: Curves need to be clipped for maximum and minimum values
-
-    
-    #### curve smoothing with exponential moving average
-    alpha = 0.5
-    smoothed_curves = np.ones_like(random_curves)
-    for curve in range(random_curves.shape[1]):
-        # running through all the N curves generated
-        smoothed_curves[:, curve] = exponential_moving_average(random_curves[:, curve], alpha)
-
-
-    if plotting==True:
-        # Plotting the load curves we generated
-        
-        plt.figure()
-        plt.title('Stochastic curves with normal distribution')
-        plt.plot(random_curves, linestyle='--', linewidth=0.2)
-        plt.plot(data, linestyle='-', linewidth=0.5, color='b', label='Original data curve')
-        plt.legend()
-        
-      
-        plt.figure()
-        plt.title('Stochastic curves with normal distribution - SMOOTHED')
-        plt.plot(smoothed_curves, linestyle='--', linewidth=0.2)
-        plt.plot(np.mean(smoothed_curves, axis=1), color='k', linewidth=0.5, label='calculated average from random curves')
-        plt.plot(data, linestyle='-', linewidth=0.5, color='b', label='Original data curve')
-        plt.legend()
-
-    return random_curves, smoothed_curves
-
-
-#rdm_gen, smooth_gen = generate_random_curves(gen_data, 1000, 0.1)
+# And for the other load data:
+load_data_2, _, _, _, _ = fn.modify_data(load_data_2, gen_data, price_data, number_days, minute_intervals)
+load_data_3, _, _, _, _ = fn.modify_data(load_data_3, gen_data, price_data, number_days, minute_intervals)
 
 
 
 
+# %% Fixed-price electricity instead of spot-price
 
+# Using HELEN's latest prices
+#https://www.helen.fi/en/electricity/electricity-products-and-prices
 
-
-
-
-
-
-####### 
-# After the load is shifted with self-consumption and spot-price following, how much load is still available to be shifted?
-
-# Industry load profile after the residential load profile
-
-
-
-
-
-
-
-
-
-
-
-
+# helen_price_data = np.ones_like(price_data)
+# price_data = 0.0899 * helen_price_data
 
 
 # %% Implementing some object-oriented programming for the first time in Python!
 
-# Load objects are created with deep copies of the load array. Deep copies allow us to copy the full array, i.e. create a copy also of the objects
-# within the array. A "shallow copy" copies only the array and references to objects contained within the original array!
-load1 = cl.Load(load_data, load_data, load_shifting)
-load2 = cl.Load(load_data*0.5, load_data*0.5, load_shifting)
-load3 = cl.Load(load_data*0.3, load_data*0.3, load_shifting)
+# If we create equal loads:
+# load_list = []
 
-# Setting the load flexibility behaviour
-load1.define_flexibility(number_days, minute_intervals, plot=False)
-load2.define_flexibility(number_days, minute_intervals, plot=False)
-load3.define_flexibility(number_days, minute_intervals, plot=False)
+# for _ in range(houses):
+#     load_gen = cl.Load(load_data, load_data, load_shifting)
+#     load_gen.define_flexibility(0.15, 2, number_days, minute_intervals, plot=False)
+#     load_list.append(load_gen)
+
+
+# If we want to create individual loads:
+
+# 2 houses consuming 5000kWh per year
+load1 = cl.Load(load_data, load_data, load_shifting)
+load2 = cl.Load(load_data, load_data, load_shifting)
+# 4 houses consuming 5500kWh per year
+load3 = cl.Load(load_data_2, load_data_2, load_shifting)
+load4 = cl.Load(load_data_2, load_data_2, load_shifting)
+load5 = cl.Load(load_data_2, load_data_2, load_shifting)
+load6 = cl.Load(load_data_2, load_data_2, load_shifting)
+# 2 houses consuming 6000kWh per year
+load7 = cl.Load(load_data_3, load_data_3, load_shifting)
+load8 = cl.Load(load_data_3, load_data_3, load_shifting)
 
 # Creating a list of all our loads
-load_list = [load1, load2, load3]
+load_list = [load1, load2, load3, load4, load5, load6, load7, load8]
+
+# Setting the load flexibility behaviour
+for load in load_list:
+    load.define_flexibility(0.15, 4, number_days, minute_intervals, plot=False)
+
+
+
 # The total load of the microgrid and the total load considering also BESS and EVs as negative loads
 total_demand = np.sum([load.load for load in load_list], axis=0)
 
@@ -185,27 +136,42 @@ total_demand_after_shift = np.sum([load.newload for load in load_list], axis=0)
 
 # %% Transforming the EVs into objects
 
+EV_list = []
+
+
+### TO-DO: EV behaviour can be changed so they remain unplugged for longer in some days!
+# The consumption from the EV battery should be proportional to how long the EV was disconnected!
+
+
+# for _ in range(EV_parameters['number']):
+#     gen_ev = cl.EV(EV_parameters['capacity'], EV_parameters['cRate'], EV_parameters['SoC'], EV_parameters['discharge threshold'], True)
+#     gen_ev.set_EV_behaviour(number_days, final_time, minute_intervals, load_data, plot=False)
+#     EV_list.append(gen_ev)
+    
 # Creating EVs and Setting EV behaviour
-EV1 = cl.EV(EV_parameters['capacity'], EV_parameters['cRate'], EV_parameters['SoC'], EV_parameters['discharge threshold'], True)
+EV1 = cl.EV(EV_parameters['capacity'], EV_parameters['cRate'], EV_parameters['SoC'], EV_parameters['discharge threshold'], EV_parameters['V2G'])
 EV1.set_EV_behaviour(number_days, final_time, minute_intervals, load_data, plot=False)
 
-EV2 = cl.EV(EV_parameters['capacity'], EV_parameters['cRate'], EV_parameters['SoC'], EV_parameters['discharge threshold'], True)
+EV2 = cl.EV(EV_parameters['capacity'], EV_parameters['cRate'], EV_parameters['SoC'], EV_parameters['discharge threshold'], EV_parameters['V2G'])
 EV2.set_EV_behaviour(number_days, final_time, minute_intervals, load_data, plot=False, random=True)
 
+EV3 = cl.EV(EV_parameters['capacity'], EV_parameters['cRate'], EV_parameters['SoC'], EV_parameters['discharge threshold'], EV_parameters['V2G'])
+EV3.set_EV_behaviour(number_days, final_time, minute_intervals, load_data, plot=False, random=True)
 
-EV_list = [EV1, EV2]
+EV4 = cl.EV(EV_parameters['capacity'], EV_parameters['cRate'], EV_parameters['SoC'], EV_parameters['discharge threshold'], EV_parameters['V2G'])
+EV4.set_EV_behaviour(number_days, final_time, minute_intervals, load_data, plot=False, random=True)
+
+EV_list = [EV1, EV2, EV3, EV4]
 
 
 #%% MICROGRID OPERATION
 
-
-
 ### TO-DO: Power-based tariffs!
-### TO-DO: Monte Carlo simulation
 ### TO-DO: Calculate available flexibility at each timestamp
-### TO-DO: Preliminary load shifts; then real-time load shifts
+### TO-DO: Monte Carlo simulation to calculate the flexibility activation in frequency markets
+### TO-DO: Preliminary load shifts; then real-time load shifts following market bidding
 
-peak_limit = np.max(load1.newload)
+peak_limit = np.max(load_list[0].newload)
 
 # Performing the day-ahead load shifts
 # "day-ahead" meaning that we perform load shifts from past and future timestamps, with a full-picture, as 
@@ -214,24 +180,11 @@ peak_limit = np.max(load1.newload)
 load_list, total_demand_after_shift, BESS_SoC, BESS_io, EV_list, grid_io = mg.mg_day_ahead_operation(load_list, BESS_parameters, 
                                                                                                      EV_list, gen_data, total_demand_after_shift, 
                                                                                                      price_data, peak_limit, price_threshold, 
-                                                                                                     minute_intervals)
+                                                                                                     minute_intervals, gen_shifting, spot_price_following)
+
 
 
 # %%  Assigning values to a dataframe for easier inspection
-
-
-# Checking if the microgrid is operating OK
-total_EV_io = np.sum([ev.EV_io for ev in EV_list], axis=0)
-
-checksum = total_demand_after_shift - gen_data + BESS_io + total_EV_io + grid_io
-
-if np.sum(checksum) != 0:
-    print('## Warning! Something strange in the microgrid, energy is leaking somewhere...##')
-else:
-    print("\n## Microgrid operating as expected ##\n")
-# Assigning loads to the dataframe
-  
-
 # Creating the data from other parameters
 microgrid_data = {
     'Total demand': total_demand,
@@ -259,39 +212,66 @@ for i, ev in enumerate(EV_list, start=1):
 microgrid_simulation = pd.DataFrame(microgrid_data, index=pd.to_datetime(time_range, format='%d-%m-%Y %H:%M'))
 
 
+fn.check_mg(microgrid_simulation)
 
 # %% Evaluating results
 
-import matplotlib.dates as md
+# import matplotlib.dates as md
 
-fig, ax = plt.subplots()
-ax.plot(microgrid_simulation.index, microgrid_simulation['Total demand'], label='Original demand')
-ax.plot(microgrid_simulation.index, microgrid_simulation['Total demand_shift'], label='Demand after shift')
-ax.plot(microgrid_simulation.index, microgrid_simulation['Grid import/export'], label='Grid import/export')
-ax.set_title('Original demand x Shifted demand')
-ax.set_xlabel('Time')
-ax.set_ylabel('Energy (kWh)')
-ax.xaxis.set_major_locator(md.HourLocator(interval=5))
-ax.xaxis.set_major_formatter(md.DateFormatter('%H:%M'))
-plt.setp(ax.xaxis.get_majorticklabels(), rotation=45)
-ax.legend()
-
-
-# %% 
+# fig, ax = plt.subplots()
+# ax.plot(microgrid_simulation.index, microgrid_simulation['Total demand'], label='Original demand')
+# ax.plot(microgrid_simulation.index, microgrid_simulation['Total demand_shift'], label='Demand after shift')
+# ax.plot(microgrid_simulation.index, microgrid_simulation['Grid import/export'], label='Grid import/export')
+# ax.set_title('Original demand x Shifted demand')
+# ax.set_xlabel('Time')
+# ax.set_ylabel('Energy (kWh)')
+# ax.xaxis.set_major_locator(md.HourLocator(interval=5))
+# ax.xaxis.set_major_formatter(md.DateFormatter('%H:%M'))
+# plt.setp(ax.xaxis.get_majorticklabels(), rotation=45)
+# ax.legend()
 
 
+# %% Evaluating the KPIs and economic benefit
 
 KPI_scss, KPI_econ = fn.mg_eval(microgrid_simulation, minute_intervals)
 
 
+# %% Calculating the average loads
+
+time_intervals = pd.date_range(start='00:00', end='23:45', freq='15T').strftime('%H:%M')
+daily_values = pd.DataFrame(index=time_intervals)
+hourly_values = []
+
+# for idx, row in daily_values.iterrows():
+#     mask = (microgrid_simulation.index.hour == idx.hour) & (microgrid_simulation.index.minute == idx.minute)
+#     hourly_values.append(microgrid_simulation.loc[mask, 'Total demand_shift'].values)
 
 
 
+for hour in range(24):
+    for minute in [00, 15, 30, 45]:
+        mask = (microgrid_simulation.index.hour == hour) & (microgrid_simulation.index.minute == minute)
+        #daily_values.loc[hour:minute, 'Values'] = microgrid_simulation.loc[mask, 'Total demand_shift'].values
+        #daily_values['Values'] = microgrid_simulation.loc[mask, 'Total demand_shift'].values
+        hourly_values.append(microgrid_simulation.loc[mask, 'Total demand_shift'].values)
+
+daily_values['Values'] = hourly_values
+
+# %% 
+# fig, ax = plt.subplots()
+# microgrid_simulation.boxplot(column='Total demand_shift', by=microgrid_simulation.index.strftime('%H:%M').rename('Hour:Minute'), ax=ax)
+# ax.set_title("Distribution of Values per 15-Minute Interval")
+# ax.set_ylabel("Demand")
+# plt.suptitle('')  # Remove the default title
+# plt.show()
 
 
 
+# %% Saving results
+# import pickle
 
-
+# with open(column+'.pkl', 'wb') as file:
+#     pickle.dump([microgrid_simulation, KPI_scss, KPI_econ], file)
 
 
 

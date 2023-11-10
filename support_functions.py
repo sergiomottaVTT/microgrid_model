@@ -14,6 +14,8 @@ import matplotlib.pyplot as plt
 
 from scipy.stats import beta
 
+# Trying out a cubic-spline interpolation instead of an original interpolation
+
 
 # %% Array interpolation for transforming arrays from hourly values to X minute intervals
 
@@ -38,7 +40,9 @@ def min_intervals(array, interval_mins):
     # Defining how many indices will there be for this new array with 'interval_mins' minute intervals
     indices = np.arange((60/interval_mins)*len(array))
     # Performing the interpolation
-    interpolated_array = np.interp(indices, np.arange(len(array))*4, array)
+    interpolated_array = np.interp(indices, np.arange(len(array))*int(60/interval_mins), array)
+     
+    #interpolated_array = interpolated_array * (np.sum(array)/np.sum(interpolated_array))
     
     return interpolated_array
 
@@ -81,11 +85,11 @@ def modify_data(load_data, gen_data, price_data, number_days, minute_intervals, 
     """
     # Cutting the raw data to be on the right size (amount of days)
     # We start from the second day just because the load behaves a bit strangely in the first hours
-    load_data = load_data[24:24*(number_days+1)]
-    gen_data = gen_data[24:24*(number_days+1)]
+    load_data = load_data[:24*(number_days)]
+    gen_data = gen_data[:24*(number_days)]
     
-    # Spot price data we have starts from 7 in the evening in the last day
-    price_data = price_data[7:(24*number_days)+7]/1000 #to have in EUR/kWh
+    # Spot price data we have is in EUR/MWh
+    price_data = price_data[:24*(number_days)]/1000 #to have in EUR/kWh
     
     # Making the interpolation for 15-minute intervals
     if minute_intervals != 60:
@@ -240,5 +244,41 @@ def mg_eval(microgrid_simulation, minute_intervals, sc=True, ss=True, econ=True)
                 'grid export': grid_export_income}
 
     return KPI_scss, KPI_econ
+
+
+# %% Checking if the microgrid is operating OK
+
+def check_mg(microgrid_simulation):
+
+    total_demand_after_shift = microgrid_simulation['Total demand_shift']
+    gen_data = microgrid_simulation['Generation']
+    BESS_io = microgrid_simulation['BESS charge/discharge']
+    grid_io = microgrid_simulation['Grid import/export']
+    
+    #total_EV_io = np.sum([ev.EV_io for ev in EV_list], axis=0)
+    total_EV_io = np.sum(microgrid_simulation[[col for col in microgrid_simulation.columns if 'I/O' in col]])
+    
+    checksum = total_demand_after_shift - gen_data + BESS_io + total_EV_io + grid_io
+    
+    if np.sum(checksum) != 0:
+        print('## Warning! Something strange in the microgrid, energy is leaking somewhere...##')
+        print('Total demand {:.2f}'.format(np.sum(total_demand_after_shift)))
+        print('Total generation {:.2f}'.format(np.sum(gen_data)))
+        print('BESS i/o {:.2f}'.format(np.sum(BESS_io)))
+        print('EV i/o {:.2f}'.format(np.sum(total_EV_io)))
+        print('Grid i/o {:.2f}'.format(np.sum(grid_io)))
+        print()
+    else:
+        print("\n## Microgrid operating as expected ##\n")
+
+    return None
+
+
+
+
+
+
+
+
 
 

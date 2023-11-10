@@ -125,7 +125,7 @@ class Load:
         return pairs, minload, maxload, maxload_future
     
     
-    def define_flexibility(self, number_days, minute_intervals, plot=False):
+    def define_flexibility(self, flex_value, flex_window, number_days, minute_intervals, plot=False):
         """
         Method to define the flexibility associated to a Load object.
 
@@ -160,7 +160,7 @@ class Load:
         #                      ] * (number_days)
         
         # Keepign a constant flexibility of 15%
-        flexibility_curve = [0.15] * 24 * number_days
+        flexibility_curve = [flex_value] * 24 * number_days
         
         
         self.flexibility_curve = np.repeat(flexibility_curve, 60/minute_intervals)
@@ -172,12 +172,12 @@ class Load:
         #                      2, 2, 3, 4, 4, 4 # evening, 18:00 to 23:00
         #                      ] * (number_days)
         
-        flexibility_window = [2] * 24 * number_days
+        flexibility_window = [flex_window] * 24 * number_days
         
         self.flexibility_window = np.repeat(flexibility_window, 60/minute_intervals)
     
         # How much the load can be at minimum and maximum value considering the flexibility parameters?
-        self.pairs, self.minload, self.maxload, self.maxload_future = Load.min_max_loads(self.load, flexibility_curve, flexibility_window, plot=plot)
+        self.pairs, self.minload, self.maxload, self.maxload_future = Load.min_max_loads(self.load, self.flexibility_curve, self.flexibility_window, plot=plot)
     
         if plot==True:
             fig, ax = plt.subplots(2,1, sharex=True)
@@ -298,10 +298,21 @@ class EV:
         #### Setting how much EV charge is used:
         self.battery_use = beta.rvs(alpha, beta_, size=number_days)
     
+        # EVs average ~6km per kWh. The average distance travelled in Finland (urban) is around 26km per day.
+        #https://www.traficom.fi/en/news/passenger-car-trips-decreased-autumn-2022-compared-previous-year-share-rail-travel-increased#:~:text=Finns%20living%20in%20rural%20areas,day%20is%20only%2026%20km.
+    
+        # Thus, the EV should use on average 4.5kWh per day. The Nissan Leaf battery pack is 24kWh, so on average, per day,
+        # the EV consumption should be around 18~20% of the BESS capacity.
+        
+        # A Beta distribution with alpha=1.5 and beta=7 gives a mean at 17.5, so these values are OK! But these vaues are changeable depending
+        # on the behaviour of the EV, so they can be set.
+    
         #### Setting the plugged-in and out times:
         
         # EV is disconnected at 8:30 and gets reconnected at 17:00.
         # There is a fluctuation of 2h in the disconnection, and 1h in the connection
+        
+        # TO-DO: There may be days the EV is not connected! We should add these cases here.
         
         # generating an array of times for the 15-minute intervals for us to get which are the indices needed
         time_intervals = np.linspace(0, final_time, int((24)*(60/minute_intervals)))
