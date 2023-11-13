@@ -172,7 +172,7 @@ def mg_eval(microgrid_simulation, minute_intervals, sc=True, ss=True, econ=True)
     total_export = microgrid_simulation['Grid import/export'][microgrid_simulation['Grid import/export'] > 0].sum() * minute_intervals/60
     
     self_consumption = (total_gen - total_export)/total_gen
-
+    print('## Microgrid results evaluation ##\n')
     if sc == True:
         print('The total self-consumption of the microgrid was {:.2f}%'.format(self_consumption * 100))
         print('The total exports to the grid were {:.2f} kWh'.format(total_export))
@@ -246,6 +246,22 @@ def mg_eval(microgrid_simulation, minute_intervals, sc=True, ss=True, econ=True)
     return KPI_scss, KPI_econ
 
 
+def printing_scenario(number_days, minute_intervals, load_shifting, spot_price_following, gen_shifting, fixed, houses, BESS_parameters, EV_parameters):
+    
+    print('## Simulation parameters ##')
+    print('{} Days, with {} minute intervals'.format(number_days, minute_intervals))
+    print('Load shifting enabled: ', load_shifting, 'for {} houses in the energy community'.format(houses))
+    print('Spot price following: ', spot_price_following)
+    print('Maximising self-consumption and self-sufficiency: ', gen_shifting)
+    
+    if fixed == True: pricing = 'Fixed price at 8.99c/kWh' 
+    else: pricing = 'Spot price'
+    
+    print('Pricing scheme: ', pricing)
+    print('BESS grid charging enabled: ', BESS_parameters['Grid enabled'])
+    print('V2G enabled: ', EV_parameters['V2G'])
+    print('####\n')
+    return None
 # %% Checking if the microgrid is operating OK
 
 def check_mg(microgrid_simulation):

@@ -43,22 +43,25 @@ price_threshold = 0.05
 # whether we try to optimise for self-consumption and self-sufficiency
 gen_shifting = False
 
+# whether we want fixed-price or spot-price (false)
+fixed = True
+
 # Setting up the parameters of the microgrid components
 houses = 8
 # If we want to have the same household loads repeated for N houses.
 
 # PV system
-PV_installed_capacity = 00.0 #kWp
+PV_installed_capacity = 50.0 #kWp
 
 gen_data = gen_data * PV_installed_capacity #gen_data in kW
 
 # BESS
-BESS_parameters = {'capacity': 0.0, #capacity in kWh
+BESS_parameters = {'capacity': 30.0, #capacity in kWh
                    'cRate': 3.0, #charge/discharge rate in kW
-                   'SoC': 00.0, # initial SoC
+                   'SoC': 30.0, # initial SoC
                    'Control': 'price_threshold', #the type of control for the battery, will discharge when threshold is above setpoint
                    'Control setpoint': price_threshold,
-                   'Grid enabled': False,
+                   'Grid enabled': True,
                    'SoC threshold': 1
                    }
 
@@ -67,7 +70,7 @@ EV_parameters = {'number': 4,   # How many EVs connected to the microgrid
                  'capacity': 40.0, #capacity
                  'SoC': 40.0,     # initial SoC
                  'cRate': 20.0 * (minute_intervals/60),   #charging rate of the charging station
-                 'V2G': False,   #enabling V2G
+                 'V2G': True,   #enabling V2G
                  'discharge threshold': (0.85, 0.6),    #can only be discharged if SoC > 85% capacity, down to 60% of capacity
                  }
 
@@ -90,8 +93,9 @@ load_data_3, _, _, _, _ = fn.modify_data(load_data_3, gen_data, price_data, numb
 # Using HELEN's latest prices
 #https://www.helen.fi/en/electricity/electricity-products-and-prices
 
-# helen_price_data = np.ones_like(price_data)
-# price_data = 0.0899 * helen_price_data
+if fixed == True:
+    helen_price_data = np.ones_like(price_data)
+    price_data = 0.0899 * helen_price_data
 
 
 # %% Implementing some object-oriented programming for the first time in Python!
@@ -233,7 +237,21 @@ fn.check_mg(microgrid_simulation)
 
 # %% Evaluating the KPIs and economic benefit
 
+
+fn.printing_scenario(number_days, minute_intervals, load_shifting, spot_price_following, gen_shifting, fixed, houses, BESS_parameters, EV_parameters)
+
 KPI_scss, KPI_econ = fn.mg_eval(microgrid_simulation, minute_intervals)
+
+
+
+# %% Calculating the flexibility availability
+
+
+
+
+
+
+
 
 
 # %% Calculating the average loads
