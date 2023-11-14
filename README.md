@@ -10,6 +10,21 @@ This project was developed initially by Sergio Motta at VTT, the Technical Resea
 
 The model is distributed as open source with an MIT licence.
 
+## Model capabilities and to-do
+This model, as of the time of its first introduction (14.11.2023), is capable of answering one question: "how much does it cost to run a microgrid with this set of assets/parameters?". That was the main question I wanted to address when developing this.
+However, there are plenty of other questions this model can address after minor changes, and there's a great potential to further develop these scripts into something even more useful.
+That's the reason behind licensing this project as open-source and having it available to whomever comes accross it. Perhaps it can be useful for further calculations.
+
+Some of my thoughts on how this project could evolve are:
+
+* Implement a "real-time" load-shifting operation instead of day-ahead, and calculate how much difference is there between the two.
+* Calculate the available flexibility for up- and down-regulation that the microgrid can offer via the SDN at each time-step.
+- Calculate how much economic benefit would be yielded from offering such services to energy markets: best and/or realistic cases.
+* a Monte Carlo implementation could be used to ensure the stochasticity of market activation and asset behaviour is accounted for
+* Grid reliability should also be accounted for (this is an extra UC for STRATA). I.e. how much value would the SDN bring by reducing the value of lost-load in grid fault events?
+* Calculate the influence of forecasting accuracy in each case, and how much (€) each (%) of accuracy is worth.
+- This would be done after comparing the "real-time" operation and the "day-ahead" operation.
+
 # Editing this README
 
 When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thank you to [makeareadme.com](https://www.makeareadme.com/) for this template.
