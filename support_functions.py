@@ -176,7 +176,7 @@ def mg_eval(microgrid_simulation, minute_intervals, sc=True, ss=True, econ=True)
     if sc == True:
         print('The total self-consumption of the microgrid was {:.2f}%'.format(self_consumption * 100))
         print('The total exports to the grid were {:.2f} kWh'.format(total_export))
-        print('And the total generation was {:.2f} kWh'.format(microgrid_simulation['Generation'].sum()))
+        print('And the total generation was {:.2f} kWh'.format(total_gen))
     
     total_consumption_loads = microgrid_simulation['Total demand_shift'].sum() * minute_intervals/60
     total_consumption_BESS = microgrid_simulation['BESS charge/discharge'].sum() * minute_intervals/60

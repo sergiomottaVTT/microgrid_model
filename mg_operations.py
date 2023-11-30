@@ -69,12 +69,13 @@ def BESS_behaviour (difference, BESS_parameters, BESS_SoC, BESS_io, price_data, 
             BESS_discharge = min(BESS_parameters['cRate'], abs(difference), BESS_parameters['SoC'])
             BESS_parameters['SoC'] = max(BESS_parameters['SoC'] - BESS_discharge, 0)
             BESS_charge = 0
-        elif (BESS_parameters['Control'] == 'price_threshold') and (price_data[timestamp] >= BESS_parameters['Control setpoint']):
+        elif (BESS_parameters['Control'] == 'price_threshold') and (price_data[timestamp] >= BESS_parameters['Price threshold']):
             BESS_discharge = min(BESS_parameters['cRate'], abs(difference), BESS_parameters['SoC'])
             BESS_parameters['SoC'] = max(BESS_parameters['SoC'] - BESS_discharge, 0)
             BESS_charge = 0
         # CHARGE
-        elif (BESS_parameters['Grid enabled'] == True) and (BESS_parameters['SoC'] < BESS_parameters['SoC threshold']*BESS_parameters['capacity']):
+        elif (BESS_parameters['Grid enabled'] == True) and (BESS_parameters['SoC'] < BESS_parameters['SoC threshold']*BESS_parameters['capacity'])\
+        and (price_data[timestamp] <= BESS_parameters['Price threshold']):
             BESS_charge = min(BESS_parameters['cRate'], BESS_parameters['capacity'] - BESS_parameters['SoC'])
             BESS_parameters['SoC'] = min(BESS_parameters['SoC'] + BESS_charge, BESS_parameters['capacity'])
             BESS_discharge = 0
@@ -146,11 +147,16 @@ def  EV_behaviour(timestamp, difference, EV, price_data, price_threshold, minute
                 
             else:
                 # It's better to charge the EV or don't do anything with it
-    
-                # we charge it by importing from the grid
-                EV_charge = min(EV.cRate, EV.capacity - EV.SoC)
-                EV.SoC = min(EV.SoC + EV_charge, EV.capacity)
-                EV_discharge = 0
+                if (price_data[timestamp] < price_threshold):
+                    # we charge it by importing from the grid
+                    EV_charge = min(EV.cRate, EV.capacity - EV.SoC)
+                    EV.SoC = min(EV.SoC + EV_charge, EV.capacity)
+                    EV_discharge = 0
+                else:
+                    # The EV remains idle because the price is too high
+                    EV_charge = 0
+                    EV_discharge = 0
+                    EV.SoC = min(EV.SoC + EV_charge, EV.capacity)
         
         difference = difference - EV_charge + EV_discharge
         EV.day_disconnect = 0
@@ -252,8 +258,6 @@ def load_shift_day_ahead(timestamp, difference, load_list, price_data, peak_limi
                         #print('Updated difference:', difference)
          
                     
-        # Seeing how the loads evolve in each timestep
-        #plt.plot(load1.newload)
 
     # The load shifting is working as intended for improving self-consumption. Now we move to the case of the spot-price following
     
