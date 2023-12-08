@@ -27,7 +27,7 @@ load_data_2 = np.loadtxt(r'data/House1_LOADDATA_5500kWh-per-a.txt')
 load_data_3 = np.loadtxt(r'data/House1_LOADDATA_6000kWh-per-a.txt')
 
 gen_data = np.loadtxt(r'data/PV_pu_data.txt') #in pu
-price_data = np.loadtxt(r'data/price_data_2022.txt', usecols=2)
+price_data = np.loadtxt(r'data/price_average.txt')
 
 # How many days the simulation should run for
 number_days = 365
@@ -72,7 +72,7 @@ EV_parameters = {'number': 4,   # How many EVs connected to the microgrid
                  'capacity': 40.0, #capacity
                  'SoC': 40.0,     # initial SoC
                  'cRate': 20.0 * (minute_intervals/60),   #charging rate of the charging station
-                 'V2G': True,   #enabling V2G
+                 'V2G': False,   #enabling V2G
                  'discharge threshold': (0.85, 0.6),    #can only be discharged if SoC > 85% capacity, down to 60% of capacity
                  }
 
@@ -167,7 +167,7 @@ EV3.set_EV_behaviour(number_days, final_time, minute_intervals, load_data, plot=
 EV4 = cl.EV(EV_parameters['capacity'], EV_parameters['cRate'], EV_parameters['SoC'], EV_parameters['discharge threshold'], EV_parameters['V2G'])
 EV4.set_EV_behaviour(number_days, final_time, minute_intervals, load_data, plot=False, random=False)
 
-EV_list = [EV1, EV2, EV3, EV4]
+#EV_list = [EV1, EV2, EV3, EV4]
 
 
 #%% MICROGRID OPERATION

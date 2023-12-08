@@ -16,9 +16,35 @@ folder = r'figures/'
 
 # %% Gathering ELSPOT price averages
 
-elspot = pd.read_csv('data/Elspotprices.csv')
+# #elspot = pd.read_csv('data/Elspotprices.csv')
 
+# price_data = pd.read_csv(r'data/price_data_5years.txt', delimiter='\t', header=None)
+# price_data.columns = ['Timestamp', 'Price data']
+# date_info = price_data['Timestamp'].to_list()
+# date_noinfo = []
+# for time in date_info:
+#     date_noinfo.append(time.split('+')[0])
+# # Creating a pandas Series from the list of strings
+# s = pd.Series(date_noinfo)
+# # Converting strings to datetime objects with timezone information
+# localized_dt = pd.to_datetime(s)
+# # Removing timezone information and formatting the datetime
+# formatted_dt = localized_dt.dt.strftime('%Y-%m-%d %H:%M')
+# index = pd.to_datetime(formatted_dt)
+# price = price_data.copy()
+# price.index = index
+# price.drop(columns=['Timestamp'], inplace=True)
 
+# price = price[price.index.year < 2023]
+# price['Day'] = price.index.day
+# price['Month'] = price.index.month
+# price['Hour'] = price.index.hour
+# # removing the leap day
+# price = price[~((price['Day'] == 29) & (price['Month'] == 2))]
+# # Calculating the average prices
+# average_prices = price.groupby([price.index.month, price.index.day, price.index.hour])['Price data'].mean().reset_index()
+
+# np.savetxt('data/price_average.txt', average_prices['Price data'].values)
 
 
 # %% Plotting the synthetic load data
