@@ -35,13 +35,14 @@ number_days = 365
 minute_intervals = 15
 
 # Load shifting is implemented
-load_shifting = False
+load_shifting = True
 # Price to be considered as "expensive" and thus worth it to discharge BESS/EV/load shift
-spot_price_following = False
-price_threshold = 1.00  # very high so that the SDN does not activate it
+spot_price_following = True
+# Below this value, the BESS and EV also consider it cheap enough to charge.
+price_threshold = 0.08
 
 # whether we try to optimise for self-consumption and self-sufficiency
-gen_shifting = False
+gen_shifting = True
 
 # whether we want fixed-price or spot-price (false)
 fixed = False
@@ -61,9 +62,9 @@ BESS_parameters = {'capacity': 30.0, #capacity in kWh
                    'Initial SoC': 30.0, # initial SoC
                    'SoC': 30.0, # variable SoC
                    'Control': 'load_threshold',#'price_threshold', #the type of control for the battery, will discharge when threshold is above setpoint
-                   'Control setpoint': 5.00,#price_threshold,
+                   'Control setpoint': 8.00,#price_threshold,
                    'Price threshold': price_threshold,
-                   'Grid enabled': False,
+                   'Grid enabled': True,
                    'SoC threshold': 1
                    }
 
@@ -72,7 +73,7 @@ EV_parameters = {'number': 4,   # How many EVs connected to the microgrid
                  'capacity': 40.0, #capacity
                  'SoC': 40.0,     # initial SoC
                  'cRate': 20.0 * (minute_intervals/60),   #charging rate of the charging station
-                 'V2G': False,   #enabling V2G
+                 'V2G': True,   #enabling V2G
                  'discharge threshold': (0.85, 0.6),    #can only be discharged if SoC > 85% capacity, down to 60% of capacity
                  }
 
@@ -167,7 +168,7 @@ EV3.set_EV_behaviour(number_days, final_time, minute_intervals, load_data, plot=
 EV4 = cl.EV(EV_parameters['capacity'], EV_parameters['cRate'], EV_parameters['SoC'], EV_parameters['discharge threshold'], EV_parameters['V2G'])
 EV4.set_EV_behaviour(number_days, final_time, minute_intervals, load_data, plot=False, random=False)
 
-#EV_list = [EV1, EV2, EV3, EV4]
+EV_list = [EV1, EV2, EV3, EV4]
 
 
 #%% MICROGRID OPERATION
