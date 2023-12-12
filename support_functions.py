@@ -225,22 +225,28 @@ def mg_eval(microgrid_simulation, minute_intervals, sc=True, ss=True, econ=True)
     grid_import_costs = abs(np.sum(microgrid_simulation['Grid import/export'][microgrid_simulation['Grid import/export'] < 0 ] 
                                * microgrid_simulation['Price data'])) * minute_intervals/60
     
+    # Distribution costs
+    distribution_costs = abs(np.sum(microgrid_simulation['Grid import/export'][microgrid_simulation['Grid import/export'] < 0 ] 
+                               * microgrid_simulation['Distribution prices'])) * minute_intervals/60
+    
     # Grid export income
     grid_export_income = abs(np.sum(microgrid_simulation['Grid import/export'][microgrid_simulation['Grid import/export'] > 0 ] 
-                               * microgrid_simulation['Price data'])) * minute_intervals/60
-    
+                               * microgrid_simulation['Distribution prices'])) * minute_intervals/60
+                               #* microgrid_simulation['Price data'])) * minute_intervals/60 # if we had the export price = spot price
     if econ == True:
         print('\n## Economic evaluation ##\n')
         print('Load costs: {:.2f} EUR'.format(load_costs))
         print('BESS charging costs: {:.2f} EUR'.format(BESS_costs))
         print('EV charging costs: {:.2f} EUR'.format(EV_costs))
         print('Grid import costs: {:.2f} EUR'.format(grid_import_costs))
+        print('Grid distribution costs: {:.2f} EUR'.format(distribution_costs))
         print('Grid export income: {:.2f} EUR'.format(grid_export_income))
 
     KPI_econ = {'load costs': load_costs,
                 'BESS costs': BESS_costs,
                 'EV costs': EV_costs,
                 'grid import': grid_import_costs,
+                'distribution': distribution_costs,
                 'grid export': grid_export_income}
 
     return KPI_scss, KPI_econ

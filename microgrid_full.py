@@ -35,24 +35,29 @@ number_days = 365
 minute_intervals = 15
 
 # Load shifting is implemented
-load_shifting = True
+load_shifting = False
 # Price to be considered as "expensive" and thus worth it to discharge BESS/EV/load shift
-spot_price_following = True
+spot_price_following = False
 # Below this value, the BESS and EV also consider it cheap enough to charge.
-price_threshold = 0.08
+price_threshold = 1.08
 
 # whether we try to optimise for self-consumption and self-sufficiency
-gen_shifting = True
+gen_shifting = False
 
 # whether we want fixed-price or spot-price (false)
 fixed = False
 
 # Setting up the parameters of the microgrid components
-houses = 8
+houses = 40
 # If we want to have the same household loads repeated for N houses.
 
+# Setting up the parameters for the house flexibility values
+flex_value = 0.1
+flex_time = 4 #in timestamps, 4 = 1 hour
+
+
 # PV system
-PV_installed_capacity = 25.0 #kWp
+PV_installed_capacity = 50.0 #kWp
 
 gen_data = gen_data * PV_installed_capacity #gen_data in kW
 
@@ -99,39 +104,44 @@ load_data_3, _, _, _, _ = fn.modify_data(load_data_3, gen_data, price_data, numb
 if fixed == True:
     helen_price_data = np.ones_like(price_data)
     price_data = 0.0899 * helen_price_data
+    
+    
+# Distribution prices
+# Fixed price of distribution is not relevant, as it will be the same anyway. But we have the distribution fee in cents/kWh
+
+distribution_prices = 0.05 * np.ones_like(price_data) #EUR/kWh
+
+# %% Creating loads
+
+#If we create equal loads:
+load_list = []
+
+for _ in range(houses):
+    load_gen = cl.Load(load_data, load_data, load_shifting)
+    load_gen.define_flexibility(flex_value, flex_time, number_days, minute_intervals, plot=False)
+    load_list.append(load_gen)
 
 
-# %% Implementing some object-oriented programming for the first time in Python!
+# # If we want to create individual loads:
 
-# If we create equal loads:
-# load_list = []
+# # 2 houses consuming 5000kWh per year
+# load1 = cl.Load(load_data, load_data, load_shifting)
+# load2 = cl.Load(load_data, load_data, load_shifting)
+# # 4 houses consuming 5500kWh per year
+# load3 = cl.Load(load_data_2, load_data_2, load_shifting)
+# load4 = cl.Load(load_data_2, load_data_2, load_shifting)
+# load5 = cl.Load(load_data_2, load_data_2, load_shifting)
+# load6 = cl.Load(load_data_2, load_data_2, load_shifting)
+# # 2 houses consuming 6000kWh per year
+# load7 = cl.Load(load_data_3, load_data_3, load_shifting)
+# load8 = cl.Load(load_data_3, load_data_3, load_shifting)
 
-# for _ in range(houses):
-#     load_gen = cl.Load(load_data, load_data, load_shifting)
-#     load_gen.define_flexibility(0.15, 2, number_days, minute_intervals, plot=False)
-#     load_list.append(load_gen)
+# # Creating a list of all our loads
+# load_list = [load1, load2, load3, load4, load5, load6, load7, load8]
 
-
-# If we want to create individual loads:
-
-# 2 houses consuming 5000kWh per year
-load1 = cl.Load(load_data, load_data, load_shifting)
-load2 = cl.Load(load_data, load_data, load_shifting)
-# 4 houses consuming 5500kWh per year
-load3 = cl.Load(load_data_2, load_data_2, load_shifting)
-load4 = cl.Load(load_data_2, load_data_2, load_shifting)
-load5 = cl.Load(load_data_2, load_data_2, load_shifting)
-load6 = cl.Load(load_data_2, load_data_2, load_shifting)
-# 2 houses consuming 6000kWh per year
-load7 = cl.Load(load_data_3, load_data_3, load_shifting)
-load8 = cl.Load(load_data_3, load_data_3, load_shifting)
-
-# Creating a list of all our loads
-load_list = [load1, load2, load3, load4, load5, load6, load7, load8]
-
-# Setting the load flexibility behaviour
-for load in load_list:
-    load.define_flexibility(0.10, 4, number_days, minute_intervals, plot=False)
+# # Setting the load flexibility behaviour
+# for load in load_list:
+#     load.define_flexibility(0.10, 4, number_days, minute_intervals, plot=False)
 
 
 
@@ -219,6 +229,8 @@ for i, ev in enumerate(EV_list, start=1):
 microgrid_simulation = pd.DataFrame(microgrid_data, index=pd.to_datetime(time_range, format='%d-%m-%Y %H:%M'))
 
 
+microgrid_simulation['Distribution prices'] = distribution_prices
+
 fn.check_mg(microgrid_simulation)
 
 # %% Evaluating results
@@ -246,6 +258,51 @@ fn.printing_scenario(number_days, minute_intervals, load_shifting, spot_price_fo
 KPI_scss, KPI_econ = fn.mg_eval(microgrid_simulation, minute_intervals)
 
 
+# %% Checking the average load shift performed
+
+mg_loadshift = microgrid_simulation[['Total demand', 'Total demand_shift']].copy()
+
+mg_loadshift['Total diff'] = mg_loadshift['Total demand_shift'] - mg_loadshift['Total demand']
+
+# Getting only the load shifted away (it should be shifted to somewhere, as the sum in diff = 0)
+mg_shiftedaway = pd.DataFrame(mg_loadshift['Total diff'][mg_loadshift['Total diff'] > 0])
+mg_shiftedaway.index = pd.to_datetime(mg_shiftedaway.index, format='%Y%m%d %H:%M')
+
+print('Total amount of load shifted in a year: {:.2f} kWh'.format(mg_shiftedaway['Total diff'].sum()))
+
+mg_shiftedaway['Day'] = mg_shiftedaway.index.day
+mg_shiftedaway['Month'] = mg_shiftedaway.index.month
+
+print('Average load shift per timestamp: {:.2f} kWh'.format(mg_shiftedaway['Total diff'].mean()))
+
+# grouping by month and day to get how much load was shifted ON AVERAGE each on each timestamp of every day
+mg_avgdailyshift = mg_shiftedaway.groupby(['Month', 'Day'])['Total diff'].mean().reset_index()
+print('Average daily load shifted: {:.2f} kWh'.format(mg_avgdailyshift['Total diff'].mean()))
+
+mg_totaldailyshift = mg_shiftedaway.groupby(['Month', 'Day'])['Total diff'].sum().reset_index()
+print('Total daily load shifted: {:.2f} kWh'.format(mg_totaldailyshift['Total diff'].mean()))
+
+#Calculating the % of daily load
+
+mg_dailyload = microgrid_simulation[['Total demand', 'Total demand_shift']].copy()
+mg_dailyload.index = pd.to_datetime(mg_dailyload.index, format='%Y%m%d %H:%M')
+mg_dailyload['Day'] = mg_dailyload.index.day
+mg_dailyload['Month'] = mg_dailyload.index.month
+
+mg_dailyload = mg_dailyload.groupby(['Month', 'Day'])['Total demand_shift'].sum().reset_index()
+mg_dailyload['Total demand_shift'] = mg_dailyload['Total demand_shift'] * minute_intervals/60
+
+
+percentage = mg_totaldailyshift['Total diff']/mg_dailyload['Total demand_shift']
+print('Average percentage of load shifted each day: {:.2f}%'.format(percentage.mean()*100))
+
+
+
+
+
+# %% Saving results 
+
+microgrid_simulation.to_pickle(r'data/results/01flex_1h_40houses_base.pkl')
 
 # %% Calculating the flexibility availability
 
