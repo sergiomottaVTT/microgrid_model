@@ -48,7 +48,7 @@ gen_shifting = False
 fixed = False
 
 # Setting up the parameters of the microgrid components
-houses = 40
+houses = 20
 # If we want to have the same household loads repeated for N houses.
 
 # Setting up the parameters for the house flexibility values
@@ -302,7 +302,7 @@ print('Average percentage of load shifted each day: {:.2f}%'.format(percentage.m
 
 # %% Saving results 
 
-microgrid_simulation.to_pickle(r'data/results/01flex_1h_40houses_base.pkl')
+microgrid_simulation.to_pickle(r'data/results/01flex_1h_20houses_base.pkl')
 
 # %% Calculating the flexibility availability
 
