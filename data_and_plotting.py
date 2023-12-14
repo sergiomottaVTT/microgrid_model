@@ -187,6 +187,9 @@ plt.savefig(folder + 'fig4_avg_spot_price.png', dpi=400)
 
 # %% Energy Community Behaviour
 
+microgrid_simulation = pd.read_pickle(r'data/results/0_25flex_1h_20houses_full.pkl')
+
+
 import matplotlib.ticker as ticker
 import matplotlib.dates as mdates
 
@@ -199,7 +202,7 @@ ax, fig = plt.subplots()
 plt.plot(mg_plot['Total demand'], linewidth=0.7, linestyle='-', color='k', label='Original demand')
 plt.plot(mg_plot['Total demand_shift'], linewidth=0.9, linestyle='--', color='k', label='Demand after load shift')
 plt.plot(mg_plot['Generation'], linewidth=0.7, alpha=0.5, linestyle=':', color='k', label='Local PV generation')
-plt.title('Load shift to maximise self-consumption and self-sufficiency')
+plt.title('Load shift to improve self-consumption and self-sufficiency \n and reduce costs with grid imports')
 plt.xlabel('Time')
 plt.ylabel('kWh')
 plt.xticks(rotation=45)
@@ -210,10 +213,12 @@ plt.gca().xaxis.set_minor_locator(ticker.MultipleLocator(base=5))
 plt.gca().spines['right'].set_visible(False)
 plt.gca().spines['top'].set_visible(False)
 
-plt.savefig(folder + 'fig5_scss_loadshift.png', dpi=400)
+plt.savefig(folder + 'fig8_loadshift_3h.png', dpi=400)
 
 
 # %% Energy Community Behaviour
+
+microgrid_simulation = pd.read_pickle(r'data/results/01flex_1h_20houses_spot.pkl')
 
 import matplotlib.ticker as ticker
 import matplotlib.dates as mdates

@@ -69,7 +69,7 @@ BESS_parameters = {'capacity': 30.0, #capacity in kWh
                    'Control': 'load_threshold',#'price_threshold', #the type of control for the battery, will discharge when threshold is above setpoint
                    'Control setpoint': 8.00,#price_threshold,
                    'Price threshold': price_threshold,
-                   'Grid enabled': True,
+                   'Grid enabled': False,
                    'SoC threshold': 1
                    }
 
@@ -187,6 +187,8 @@ EV_list = [EV1, EV2, EV3, EV4]
 ### TO-DO: Calculate available flexibility at each timestamp
 ### TO-DO: Monte Carlo simulation to calculate the flexibility activation in frequency markets
 ### TO-DO: Preliminary load shifts; then real-time load shifts following market bidding
+### TO-DO: CHECK IF THE LOAD SHIFTING IS BEING LIMITED! IT SHOULDNT BE POSSIBLE TO GO BELOW MINLOAD!!!
+
 
 peak_limit = np.max(load_list[0].newload)
 
@@ -302,7 +304,7 @@ print('Average percentage of load shifted each day: {:.2f}%'.format(percentage.m
 
 # %% Saving results 
 
-microgrid_simulation.to_pickle(r'data/results/01flex_1h_20houses_base.pkl')
+#microgrid_simulation.to_pickle(r'data/results/01flex_1h_20houses_base.pkl')
 
 # %% Calculating the flexibility availability
 
